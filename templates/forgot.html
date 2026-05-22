@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>NoxScan — Mot de passe oublié</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #0a0c10; color: #d0d0d0; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        .card { background: #14171e; padding: 40px; border-radius: 12px; border: 1px solid #1e2128; width: 420px; max-width: 95%; }
+        h1 { color: #00c853; text-align: center; margin-bottom: 4px; }
+        p.sub { color: #666; text-align: center; margin-bottom: 24px; font-size: 13px; }
+        input { width: 100%; padding: 12px 14px; margin-bottom: 12px; background: #0a0c10; border: 1px solid #1e2128; border-radius: 6px; color: #e0e0e0; font-size: 14px; }
+        input:focus { outline: none; border-color: #00c853; }
+        button { width: 100%; padding: 12px; background: #00c853; border: none; border-radius: 6px; color: #000; font-size: 15px; font-weight: 700; cursor: pointer; }
+        button:hover { background: #00e676; }
+        .error { color: #ff1744; text-align: center; margin-bottom: 12px; background: #2a1a1a; padding: 8px; border-radius: 4px; }
+        .link { text-align: center; margin-top: 16px; font-size: 13px; }
+        .link a { color: #2979ff; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Mot de passe oublié</h1>
+        <p class="sub">Entrez votre nom d'utilisateur</p>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        <form method="POST">
+            <input type="text" name="username" placeholder="Nom d'utilisateur" required autofocus>
+            <button type="submit">Obtenir un token</button>
+        </form>
+        <div class="link"><a href="/login">Retour à la connexion</a></div>
+    </div>
+</body>
+</html>

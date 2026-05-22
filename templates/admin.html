@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>NoxScan — Administration</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #0a0c10; color: #d0d0d0; padding: 30px; }
+        .container { max-width: 1400px; margin: auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .header h1 { color: #00c853; }
+        .back { color: #666; text-decoration: none; font-size: 13px; }
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 30px; }
+        .stat-card { background: #14171e; padding: 20px; border-radius: 10px; border: 1px solid #1e2128; text-align: center; }
+        .stat-card .num { font-size: 28px; font-weight: 700; color: #00c853; }
+        .stat-card .label { font-size: 12px; color: #666; margin-top: 4px; }
+        h2 { color: #fff; font-size: 20px; margin: 24px 0 12px; }
+        table { width: 100%; border-collapse: collapse; background: #14171e; border-radius: 10px; overflow: hidden; }
+        th, td { padding: 12px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid #1e2128; }
+        th { background: #1e2128; color: #888; text-transform: uppercase; font-size: 11px; }
+        tr:hover td { background: #181b24; }
+        .badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge-admin { background: #2979ff; color: white; }
+        .badge-user { background: #666; color: white; }
+        .badge-blocked { background: #ff1744; color: white; }
+        .badge-active { background: #00c853; color: black; }
+        .btn { padding: 6px 14px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 600; display: inline-block; }
+        .btn-block { background: #ff1744; color: white; }
+        .btn-unblock { background: #00c853; color: black; }
+        .btn-delete { background: #ff1744; color: white; }
+        .btn-logs { background: #2979ff; color: white; }
+        a { text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        pre { background: #0d0f14; padding: 16px; border-radius: 8px; font-size: 11px; max-height: 300px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ Administration</h1>
+            <a href="/" class="back">← Retour</a>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card"><div class="num">{{ total_users }}</div><div class="label">Utilisateurs</div></div>
+            <div class="stat-card"><div class="num">{{ total_scans }}</div><div class="label">Scans totaux</div></div>
+            <div class="stat-card"><div class="num" style="color: #ff1744;">{{ blocked_users }}</div><div class="label">Bloqués</div></div>
+        </div>
+        
+        <h2>👥 Utilisateurs</h2>
+        <table>
+            <tr>
+                <th>Utilisateur</th><th>Email</th><th>Rôle</th><th>Inscrit</th><th>Dernière connexion</th><th>Scans</th><th>Statut</th><th>Actions</th>
+            </tr>
+            {% for u in users %}
+            <tr>
+                <td><strong>{{ u.username }}</strong></td>
+                <td>{{ u.email }}</td>
+                <td><span class="badge badge-{{ u.role }}">{{ u.role }}</span></td>
+                <td>{{ u.created_at[:10] }}</td>
+                <td>{{ u.last_login[:16] if u.last_login else 'Jamais' }}</td>
+                <td>{{ u.total_scans }}</td>
+                <td><span class="badge badge-{{ 'blocked' if u.blocked else 'active' }}">{{ 'Bloqué' if u.blocked else 'Actif' }}</span></td>
+                <td>
+                    <a href="/admin/logs/{{ u.username }}" class="btn btn-logs">Logs</a>
+                    {% if u.role != 'admin' %}
+                        {% if u.blocked %}
+                            <a href="/admin/unblock/{{ u.username }}" class="btn btn-unblock">Débloquer</a>
+                        {% else %}
+                            <a href="/admin/block/{{ u.username }}" class="btn btn-block">Bloquer</a>
+                        {% endif %}
+                        <a href="/admin/delete/{{ u.username }}" class="btn btn-delete" onclick="return confirm('Supprimer {{ u.username }} ?')">Supprimer</a>
+                    {% else %}
+                        <span style="color:#888;font-size:12px;">—</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        
+        <h2>📊 Activité par utilisateur</h2>
+        <table>
+            <tr><th>Utilisateur</th><th>Actions totales</th><th>Scans</th><th>Dernière action</th></tr>
+            {% for u, activity in user_activity.items() %}
+            <tr>
+                <td>{{ u }}</td>
+                <td>{{ activity.total }}</td>
+                <td>{{ activity.scans }}</td>
+                <td>{{ activity.last_action }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        
+        <h2>📋 Dernières actions (50)</h2>
+        <pre>{% for log in logs %}{{ log.timestamp }} — {{ log.user }} — {{ log.action }} — {{ log.detail[:60] }}
+{% endfor %}</pre>
+    </div>
+</body>
+</html>

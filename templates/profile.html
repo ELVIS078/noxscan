@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>NoxScan — Profil</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #0a0c10; color: #d0d0d0; padding: 30px; }
+        .container { max-width: 600px; margin: auto; }
+        h1 { color: #00c853; }
+        .back { color: #666; text-decoration: none; font-size: 13px; display: inline-block; margin-bottom: 20px; }
+        .card { background: #14171e; padding: 30px; border-radius: 12px; border: 1px solid #1e2128; }
+        .info { margin-bottom: 24px; }
+        .info p { font-size: 14px; color: #aaa; margin: 4px 0; }
+        .info strong { color: #ddd; }
+        h2 { color: #fff; font-size: 18px; margin-bottom: 16px; padding-top: 16px; border-top: 1px solid #1e2128; }
+        input { width: 100%; padding: 12px 14px; margin-bottom: 12px; background: #0a0c10; border: 1px solid #1e2128; border-radius: 6px; color: #e0e0e0; font-size: 14px; }
+        input:focus { outline: none; border-color: #00c853; }
+        button { width: 100%; padding: 12px; background: #00c853; border: none; border-radius: 6px; color: #000; font-size: 15px; font-weight: 700; cursor: pointer; }
+        button:hover { background: #00e676; }
+        .success { color: #00c853; background: #0a1a0a; padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; font-size: 13px; }
+        .error { color: #ff1744; background: #2a1a1a; padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back">← Retour</a>
+        <h1>Mon Profil</h1>
+        <div class="card">
+            <div class="info">
+                <p><strong>Nom d'utilisateur :</strong> {{ username }}</p>
+                <p><strong>Rôle :</strong> {{ session.role }}</p>
+            </div>
+            <h2>Changer le mot de passe</h2>
+            {% if success %}<div class="success">{{ success }}</div>{% endif %}
+            {% if error %}<div class="error">{{ error }}</div>{% endif %}
+            <form method="POST">
+                <input type="password" name="old_password" placeholder="Ancien mot de passe" required>
+                <input type="password" name="new_password" placeholder="Nouveau mot de passe (min 6)" required>
+                <input type="password" name="confirm_password" placeholder="Confirmer" required>
+                <button type="submit">Changer</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

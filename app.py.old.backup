@@ -1,0 +1,828 @@
+#!/usr/bin/env python3
+"""
+NoxScan Security Platform — Serveur sécurisé
+Analyse, exploitation et rapport automatique
+"""
+
+from flask import Flask, request, render_template, redirect, jsonify, session, send_file, abort
+import json
+import os
+import secrets
+import subprocess
+import time
+from datetime import datetime
+from functools import wraps
+from config import Config
+from scanner.nmap_scanner import NmapScanner
+from scanner.web_scanner import WebScanner
+from scanner.exploit import ExploitEngine
+from scanner.reporter import Reporter
+from autodefense import AutoDefense
+from security_headers import add_security_headers
+
+defense = AutoDefense()
+
+app = Flask(__name__)
+
+@app.after_request
+def apply_security_headers(response):
+    return add_security_headers(response)
+app.secret_key = Config.SECRET_KEY
+
+# Création des dossiers
+for d in [Config.SCAN_DIR, Config.LOG_DIR, Config.REPORT_DIR, "exploit"]:
+    os.makedirs(d, exist_ok=True)
+
+# ============ SÉCURITÉ ============
+
+failed_logins = {}  # IP -> {"count": int, "first_attempt": float}
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        ip = request.remote_addr
+        
+        # Auto-défense
+        if defense.is_blocked(ip):
+            abort(403, "Acces refuse - IP bloquee")
+        
+        defense.check_request(ip, request.path)
+        if not session.get('logged_in'):
+            return redirect('/login')
+        
+        # Vérification du timeout de session
+        last_active = session.get('last_active', 0)
+        if time.time() - last_active > Config.SESSION_TIMEOUT:
+            session.clear()
+            return redirect('/login')
+        
+        session['last_active'] = time.time()
+        return f(*args, **kwargs)
+    return decorated
+
+def rate_limit_check():
+    """Vérifie le rate limiting global"""
+    ip = request.remote_addr
+    
+    # Vérification IP bloquée
+    if ip in Config.BLOCKED_IPS:
+        abort(403, "IP bloquée")
+    
+    # Rate limiting simple
+    now = time.time()
+    if not hasattr(rate_limit_check, 'requests'):
+        rate_limit_check.requests = {}
+    
+    # Nettoie les entrées anciennes
+    rate_limit_check.requests = {
+        k: v for k, v in rate_limit_check.requests.items()
+        if now - v[0] < 60
+    }
+    
+    if ip in rate_limit_check.requests:
+        count, first = rate_limit_check.requests[ip]
+        if count >= Config.API_RATE_LIMIT:
+            abort(429, "Trop de requêtes. Veuillez attendre.")
+        rate_limit_check.requests[ip] = (count + 1, first)
+    else:
+        rate_limit_check.requests[ip] = (1, now)
+
+# ============ AUTHENTIFICATION ============
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        ip = request.remote_addr
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        
+        # Rate limiting des tentatives de connexion
+        now = time.time()
+        if ip in failed_logins:
+            count, first = failed_logins[ip]
+            if now - first > Config.FAILED_LOGIN_WINDOW:
+                failed_logins[ip] = [1, now]
+            elif count >= Config.FAILED_LOGIN_LIMIT:
+                # Log la tentative bloquée
+                _log_action("bruteforce_blocked", f"IP: {ip}", "system")
+                return render_template("login.html", error="Trop de tentatives. Réessayez dans 5 minutes.")
+            else:
+                failed_logins[ip][0] += 1
+        else:
+            failed_logins[ip] = [1, now]
+        
+        # Vérification des identifiants
+        if username in Config.USERS:
+            if Config.USERS[username]["password"] == password:
+                session['logged_in'] = True
+                session['username'] = username
+                session['role'] = Config.USERS[username]["role"]
+                session['last_active'] = time.time()
+                session['ip'] = ip
+                
+                # Reset des tentatives échouées
+                if ip in failed_logins:
+                    del failed_logins[ip]
+                
+                _log_action("login", f"Utilisateur: {username}", username)
+                return redirect('/')
+        
+        _log_action("login_failed", f"Utilisateur: {username}, IP: {ip}", "system")
+        return render_template("login.html", error="Identifiants invalides")
+    
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    username = session.get('username', 'inconnu')
+    _log_action("logout", f"Utilisateur: {username}", username)
+    session.clear()
+    return redirect('/login')
+
+# ============ PAGES PRINCIPALES ============
+
+@app.route("/")
+@login_required
+def index():
+    rate_limit_check()
+    
+    scans = []
+    if os.path.exists(Config.SCAN_DIR):
+        for f in sorted(os.listdir(Config.SCAN_DIR), reverse=True):
+            if f.endswith(".json"):
+                try:
+                    with open(f"{Config.SCAN_DIR}/{f}") as fh:
+                        data = json.load(fh)
+                        # Ajoute des infos de synthèse
+                        vulns = data.get("vulnerabilities", [])
+                        data["_critical"] = sum(1 for v in vulns if v.get("severity") == "critical")
+                        data["_high"] = sum(1 for v in vulns if v.get("severity") == "high")
+                        data["_total_vulns"] = len(vulns)
+                        scans.append(data)
+                except:
+                    pass
+    
+    return render_template("index.html", scans=scans[:20])
+
+@app.route("/scan", methods=["GET", "POST"])
+@login_required
+def new_scan():
+    rate_limit_check()
+    
+    if request.method == "POST":
+        target = request.form.get("target", "").strip()
+        scan_type = request.form.get("type", "full")
+        
+        if not target:
+            return render_template("scan.html", error="Veuillez entrer une cible")
+        
+        # Validation simple
+        if len(target) > 500:
+            return render_template("scan.html", error="Cible trop longue")
+        
+        # Log
+        _log_action("scan_start", f"Cible: {target}, Type: {scan_type}", session.get('username'))
+        
+        # Génération ID unique
+        scan_id = secrets.token_hex(8)
+        
+        try:
+            # Lance le scan
+            results = _run_scan(target, scan_type)
+            results["scan_id"] = scan_id
+            
+            # Sauvegarde
+            with open(f"{Config.SCAN_DIR}/{scan_id}.json", "w") as f:
+                json.dump(results, f, indent=2, ensure_ascii=False)
+            
+            _log_action("scan_complete", f"Cible: {target}, Vulns: {len(results.get('vulnerabilities', []))}", session.get('username'))
+            
+            return redirect(f"/results/{scan_id}")
+            
+        except Exception as e:
+            _log_action("scan_error", f"Cible: {target}, Erreur: {str(e)[:100]}", session.get('username'))
+            return render_template("scan.html", error=f"Erreur lors du scan: {str(e)[:200]}")
+    
+    return render_template("scan.html")
+
+@app.route("/results/<scan_id>")
+@login_required
+def view_results(scan_id):
+    rate_limit_check()
+    
+    # Protection contre le path traversal
+    if '/' in scan_id or '..' in scan_id:
+        abort(400)
+    
+    path = f"{Config.SCAN_DIR}/{scan_id}.json"
+    if not os.path.exists(path):
+        return "Scan introuvable", 404
+    
+    with open(path) as f:
+        results = json.load(f)
+    
+    return render_template("results.html", results=results, scan_id=scan_id)
+
+@app.route("/exploit/<scan_id>")
+@login_required
+def exploit_scan(scan_id):
+    rate_limit_check()
+    
+    # Protection path traversal
+    if '/' in scan_id or '..' in scan_id:
+        abort(400)
+    
+    path = f"{Config.SCAN_DIR}/{scan_id}.json"
+    if not os.path.exists(path):
+        return "Scan introuvable", 404
+    
+    with open(path) as f:
+        scan_results = json.load(f)
+    
+    _log_action("exploit_start", f"Scan: {scan_id}", session.get('username'))
+    
+    try:
+        # Exploitation
+        engine = ExploitEngine(scan_results)
+        exploit_results = engine.exploit_all()
+        
+        # Mise à jour des résultats
+        scan_results['exploitation'] = exploit_results
+        with open(f"{Config.SCAN_DIR}/{scan_id}.json", "w") as f:
+            json.dump(scan_results, f, indent=2, ensure_ascii=False)
+        
+        _log_action("exploit_complete", f"Scan: {scan_id}, Exploits: {len(exploit_results)}", session.get('username'))
+        
+    except Exception as e:
+        _log_action("exploit_error", f"Scan: {scan_id}, Erreur: {str(e)[:100]}", session.get('username'))
+    
+    return redirect(f"/results/{scan_id}")
+
+@app.route("/report/<scan_id>")
+@login_required
+def generate_report(scan_id):
+    rate_limit_check()
+    
+    # Protection path traversal
+    if '/' in scan_id or '..' in scan_id:
+        abort(400)
+    
+    path = f"{Config.SCAN_DIR}/{scan_id}.json"
+    if not os.path.exists(path):
+        return "Scan introuvable", 404
+    
+    with open(path) as f:
+        scan_results = json.load(f)
+    
+    exploit_results = scan_results.get('exploitation', [])
+    
+    try:
+        reporter = Reporter(scan_results, exploit_results)
+        report = reporter.generate()
+        report_path = reporter.save_html(f"rapport_{scan_id}.html")
+        
+        _log_action("report_generated", f"Scan: {scan_id}", session.get('username'))
+        
+        return send_file(report_path, as_attachment=True, download_name=f"rapport_securite_{scan_id}.html")
+        
+    except Exception as e:
+        _log_action("report_error", f"Scan: {scan_id}, Erreur: {str(e)[:100]}", session.get('username'))
+        return f"Erreur lors de la génération du rapport: {str(e)[:200]}", 500
+
+@app.route("/history")
+@login_required
+def history():
+    rate_limit_check()
+    
+    scans = []
+    if os.path.exists(Config.SCAN_DIR):
+        for f in sorted(os.listdir(Config.SCAN_DIR), reverse=True):
+            if f.endswith(".json"):
+                try:
+                    with open(f"{Config.SCAN_DIR}/{f}") as fh:
+                        data = json.load(fh)
+                        vulns = data.get("vulnerabilities", [])
+                        data["_critical"] = sum(1 for v in vulns if v.get("severity") == "critical")
+                        data["_high"] = sum(1 for v in vulns if v.get("severity") == "high")
+                        data["_total_vulns"] = len(vulns)
+                        scans.append(data)
+                except:
+                    pass
+    
+    return render_template("history.html", scans=scans[:100])
+
+@app.route("/logs")
+@login_required
+def view_logs():
+    rate_limit_check()
+    
+    logs = []
+    log_path = f"{Config.LOG_DIR}/audit.log"
+    if os.path.exists(log_path):
+        with open(log_path) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        logs.append(json.loads(line))
+                    except:
+                        pass
+    
+    return render_template("logs.html", logs=logs[-100:][::-1])
+
+@app.route("/api/status")
+@login_required
+def api_status():
+    """API simple pour vérifier que le serveur tourne"""
+    return jsonify({
+        "status": "running",
+        "user": session.get('username'),
+        "time": datetime.now().isoformat()
+    })
+
+# ============ MOTEUR DE SCAN ============
+
+def _run_scan(target, scan_type="full"):
+    """Lance le scan complet de la cible"""
+    import re
+    
+    results = {
+        "target": target,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "type": scan_type,
+        "status": "completed",
+        "ports": [],
+        "technologies": [],
+        "vulnerabilities": [],
+        "exploitation": [],
+        "warnings": []
+    }
+    
+    # Déterminer le type de cible
+    is_ip = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", target)
+    is_url = target.startswith("http://") or target.startswith("https://")
+    
+    # 1. Scan réseau
+    if is_ip or not is_url:
+        try:
+            print(f"\n[*] Phase 1: Scan réseau de {target}")
+            nmap = NmapScanner(target)
+            
+            if scan_type == "quick":
+                scan_result = nmap.scan_quick()
+            elif scan_type == "all_ports":
+                scan_result = nmap.scan_all_ports()
+            else:
+                scan_result = nmap.scan_full()
+            
+            results["ports"] = scan_result.get("ports", [])
+            results["os"] = scan_result.get("os")
+            results["hostname"] = scan_result.get("hostname")
+            results["mac"] = scan_result.get("mac")
+            
+            for v in scan_result.get("vulnerabilities", []):
+                results["vulnerabilities"].append(v)
+            
+            if scan_result.get("error"):
+                results["warnings"].append(f"Nmap: {scan_result['error']}")
+            
+            print(f"  [✓] Scan réseau terminé: {len(results['ports'])} ports trouvés")
+            
+        except Exception as e:
+            results["warnings"].append(f"Erreur scan réseau: {str(e)[:100]}")
+            print(f"  [✗] Erreur scan réseau: {str(e)[:80]}")
+    
+    # 2. Scan web
+    if is_url or not is_ip:
+        try:
+            url = target if is_url else f"https://{target}"
+            
+            print(f"\n[*] Phase 2: Scan web de {url}")
+            web = WebScanner(url)
+            web_result = web.scan_all()
+            
+            results["status_code"] = web_result.get("status_code")
+            results["title"] = web_result.get("title")
+            results["server"] = web_result.get("server")
+            results["headers"] = web_result.get("headers")
+            results["security_headers"] = web_result.get("security_headers")
+            results["technologies"] = web_result.get("technologies", [])
+            results["directories"] = web_result.get("directories", [])
+            results["forms"] = web_result.get("forms", [])
+            results["waf"] = web_result.get("waf")
+            
+            for v in web_result.get("vulnerabilities", []):
+                # Éviter les doublons
+                if v not in results["vulnerabilities"]:
+                    results["vulnerabilities"].append(v)
+            
+            if web_result.get("error"):
+                results["warnings"].append(f"Web: {web_result['error']}")
+            
+            print(f"  [✓] Scan web terminé: {len(results['vulnerabilities'])} vulnérabilités")
+            
+        except Exception as e:
+            results["warnings"].append(f"Erreur scan web: {str(e)[:100]}")
+            print(f"  [✗] Erreur scan web: {str(e)[:80]}")
+    
+    print(f"\n[✓] Scan terminé: {len(results['vulnerabilities'])} vulnérabilités trouvées")
+    return results
+
+def _log_action(action, detail, user):
+
+@app.route("/bypass/<target>")
+@login_required
+def bypass_waf(target):
+    """Contourne le WAF pour trouver la vraie IP"""
+    rate_limit_check()
+    
+    if "/" in target or ".." in target:
+        abort(400)
+    
+    _log_action("bypass_start", f"Cible: {target}", session.get("username"))
+    
+    try:
+        from scanner.cloudflare_bypass import CloudflareBypass
+        bypass = CloudflareBypass(target)
+        results = bypass.bypass_all()
+        
+        if results.get("success"):
+            scan_results = bypass.scan_with_bypass()
+            results["scan_results"] = scan_results
+        
+        _log_action("bypass_complete", f"Cible: {target}, IP: {results.get('real_ip', 'none')}", session.get("username"))
+        return jsonify(results)
+    except Exception as e:
+        _log_action("bypass_error", f"Cible: {target}, Erreur: {str(e)[:200]}", session.get("username"))
+        return jsonify({"error": str(e)[:200], "target": target}), 500
+
+# ============ GESTION DES ERREURS ============
+
+@app.errorhandler(404)
+def not_found(e):
+    return render_template("error.html", code=404, message="Page introuvable"), 404
+
+@app.errorhandler(403)
+def forbidden(e):
+    if hasattr(defense, 'is_blocked') and defense.is_blocked(request.remote_addr):
+        return render_template("error.html", code=403, message="Accès refusé - IP bloquée par l'auto-défense"), 403
+    return render_template("error.html", code=403, message="Accès refusé"), 403
+
+@app.errorhandler(429)
+def too_many_requests(e):
+    return render_template("error.html", code=429, message="Trop de requêtes. Veuillez patienter."), 429
+
+@app.errorhandler(500)
+def server_error(e):
+    _log_action("server_error", f"Erreur: {str(e)[:200]}", session.get("username") if session.get("logged_in") else "system")
+    return render_template("error.html", code=500, message="Erreur interne du serveur"), 500
+
+# ============ PAGES PRINCIPALES ============
+
+@app.route("/")
+@login_required
+def index():
+    rate_limit_check()
+    
+    scans = []
+    if os.path.exists(Config.SCAN_DIR):
+        for f in sorted(os.listdir(Config.SCAN_DIR), reverse=True):
+            if f.endswith(".json"):
+                try:
+                    with open(f"{Config.SCAN_DIR}/{f}") as fh:
+                        data = json.load(fh)
+                        vulns = data.get("vulnerabilities", [])
+                        data["_critical"] = sum(1 for v in vulns if v.get("severity") == "critical")
+                        data["_high"] = sum(1 for v in vulns if v.get("severity") == "high")
+                        data["_total_vulns"] = len(vulns)
+                        scans.append(data)
+                except:
+                    pass
+    
+    return render_template("index.html", scans=scans[:20])
+
+@app.route("/scan", methods=["GET", "POST"])
+@login_required
+def new_scan():
+    rate_limit_check()
+    
+    if request.method == "POST":
+        target = request.form.get("target", "").strip()
+        scan_type = request.form.get("type", "full")
+        
+        if not target:
+            return render_template("scan.html", error="Veuillez entrer une cible")
+        
+        if len(target) > 500:
+            return render_template("scan.html", error="Cible trop longue")
+        
+        _log_action("scan_start", f"Cible: {target}, Type: {scan_type}", session.get("username"))
+        
+        scan_id = secrets.token_hex(8)
+        
+        try:
+            results = _run_scan(target, scan_type)
+            results["scan_id"] = scan_id
+            
+            with open(f"{Config.SCAN_DIR}/{scan_id}.json", "w") as f:
+                json.dump(results, f, indent=2, ensure_ascii=False)
+            
+            _log_action("scan_complete", f"Cible: {target}, Vulns: {len(results.get('vulnerabilities', []))}", session.get("username"))
+            
+            return redirect(f"/results/{scan_id}")
+            
+        except Exception as e:
+            _log_action("scan_error", f"Cible: {target}, Erreur: {str(e)[:100]}", session.get("username"))
+            return render_template("scan.html", error=f"Erreur lors du scan: {str(e)[:200]}")
+    
+    return render_template("scan.html")
+
+@app.route("/results/<scan_id>")
+@login_required
+def view_results(scan_id):
+    rate_limit_check()
+    
+    if "/" in scan_id or ".." in scan_id:
+        abort(400)
+    
+    path = f"{Config.SCAN_DIR}/{scan_id}.json"
+    if not os.path.exists(path):
+        return "Scan introuvable", 404
+    
+    with open(path) as f:
+        results = json.load(f)
+    
+    return render_template("results.html", results=results, scan_id=scan_id)
+
+@app.route("/exploit/<scan_id>")
+@login_required
+def exploit_scan(scan_id):
+    rate_limit_check()
+    
+    if "/" in scan_id or ".." in scan_id:
+        abort(400)
+    
+    path = f"{Config.SCAN_DIR}/{scan_id}.json"
+    if not os.path.exists(path):
+        return "Scan introuvable", 404
+    
+    with open(path) as f:
+        scan_results = json.load(f)
+    
+    _log_action("exploit_start", f"Scan: {scan_id}", session.get("username"))
+    
+    try:
+        engine = ExploitEngine(scan_results)
+        exploit_results = engine.exploit_all()
+        
+        scan_results["exploitation"] = exploit_results
+        with open(f"{Config.SCAN_DIR}/{scan_id}.json", "w") as f:
+            json.dump(scan_results, f, indent=2, ensure_ascii=False)
+        
+        _log_action("exploit_complete", f"Scan: {scan_id}, Exploits: {len(exploit_results)}", session.get("username"))
+        
+    except Exception as e:
+        _log_action("exploit_error", f"Scan: {scan_id}, Erreur: {str(e)[:100]}", session.get("username"))
+    
+    return redirect(f"/results/{scan_id}")
+
+@app.route("/report/<scan_id>")
+@login_required
+def generate_report(scan_id):
+    rate_limit_check()
+    
+    if "/" in scan_id or ".." in scan_id:
+        abort(400)
+    
+    path = f"{Config.SCAN_DIR}/{scan_id}.json"
+    if not os.path.exists(path):
+        return "Scan introuvable", 404
+    
+    with open(path) as f:
+        scan_results = json.load(f)
+    
+    exploit_results = scan_results.get("exploitation", [])
+    
+    try:
+        reporter = Reporter(scan_results, exploit_results)
+        report = reporter.generate()
+        report_path = reporter.save_html(f"rapport_{scan_id}.html")
+        
+        _log_action("report_generated", f"Scan: {scan_id}", session.get("username"))
+        
+        return send_file(report_path, as_attachment=True, download_name=f"rapport_securite_{scan_id}.html")
+        
+    except Exception as e:
+        _log_action("report_error", f"Scan: {scan_id}, Erreur: {str(e)[:100]}", session.get("username"))
+        return f"Erreur lors de la génération du rapport: {str(e)[:200]}", 500
+
+@app.route("/history")
+@login_required
+def history():
+    rate_limit_check()
+    
+    scans = []
+    if os.path.exists(Config.SCAN_DIR):
+        for f in sorted(os.listdir(Config.SCAN_DIR), reverse=True):
+            if f.endswith(".json"):
+                try:
+                    with open(f"{Config.SCAN_DIR}/{f}") as fh:
+                        data = json.load(fh)
+                        vulns = data.get("vulnerabilities", [])
+                        data["_critical"] = sum(1 for v in vulns if v.get("severity") == "critical")
+                        data["_high"] = sum(1 for v in vulns if v.get("severity") == "high")
+                        data["_total_vulns"] = len(vulns)
+                        scans.append(data)
+                except:
+                    pass
+    
+    return render_template("history.html", scans=scans[:100])
+
+@app.route("/logs")
+@login_required
+def view_logs():
+    rate_limit_check()
+    
+    logs = []
+    log_path = f"{Config.LOG_DIR}/audit.log"
+    if os.path.exists(log_path):
+        with open(log_path) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        logs.append(json.loads(line))
+                    except:
+                        pass
+    
+    return render_template("logs.html", logs=logs[-100:][::-1])
+
+@app.route("/api/status")
+@login_required
+def api_status():
+    return jsonify({
+        "status": "running",
+        "user": session.get("username"),
+        "time": datetime.now().isoformat(),
+        "version": "NoxScan v2.0"
+    })
+
+# ============ MOTEUR DE SCAN ============
+
+def _run_scan(target, scan_type="full"):
+    """Lance le scan complet de la cible"""
+    import re
+    
+    results = {
+        "target": target,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "type": scan_type,
+        "status": "completed",
+        "ports": [],
+        "technologies": [],
+        "vulnerabilities": [],
+        "exploitation": [],
+        "warnings": []
+    }
+    
+    # Si mode bypass WAF
+    if scan_type == "waf_bypass":
+        try:
+            from scanner.cloudflare_bypass import CloudflareBypass
+            bypass = CloudflareBypass(target)
+            bypass_results = bypass.bypass_all()
+            results["bypass"] = bypass_results
+            
+            if bypass_results.get("success"):
+                scan_results = bypass.scan_with_bypass()
+                results["ports"] = scan_results.get("nmap_scan", {}).get("ports", [])
+                results["direct_access"] = scan_results.get("direct_access", {})
+                results["warnings"].append(f"WAF contourné via IP: {bypass_results.get('real_ip')}")
+            else:
+                results["warnings"].append("Impossible de contourner le WAF")
+        except Exception as e:
+            results["warnings"].append(f"Erreur contournement WAF: {str(e)[:100]}")
+        
+        return results
+    
+    # Déterminer le type de cible
+    is_ip = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", target)
+    is_url = target.startswith("http://") or target.startswith("https://")
+    
+    # 1. Scan réseau
+    if is_ip or not is_url:
+        try:
+            print(f"\n[*] Phase 1: Scan réseau de {target}")
+            nmap = NmapScanner(target)
+            
+            if scan_type == "quick":
+                scan_result = nmap.scan_quick()
+            elif scan_type == "all_ports":
+                scan_result = nmap.scan_all_ports()
+            else:
+                scan_result = nmap.scan_full()
+            
+            results["ports"] = scan_result.get("ports", [])
+            results["os"] = scan_result.get("os")
+            results["hostname"] = scan_result.get("hostname")
+            results["mac"] = scan_result.get("mac")
+            
+            for v in scan_result.get("vulnerabilities", []):
+                results["vulnerabilities"].append(v)
+            
+            if scan_result.get("error"):
+                results["warnings"].append(f"Nmap: {scan_result['error']}")
+            
+            print(f"  [✓] Scan réseau terminé: {len(results['ports'])} ports trouvés")
+            
+        except Exception as e:
+            results["warnings"].append(f"Erreur scan réseau: {str(e)[:100]}")
+            print(f"  [✗] Erreur scan réseau: {str(e)[:80]}")
+    
+    # 2. Scan web
+    if is_url or not is_ip:
+        try:
+            url = target if is_url else f"https://{target}"
+            
+            print(f"\n[*] Phase 2: Scan web de {url}")
+            web = WebScanner(url)
+            web_result = web.scan_all()
+            
+            results["status_code"] = web_result.get("status_code")
+            results["title"] = web_result.get("title")
+            results["server"] = web_result.get("server")
+            results["headers"] = web_result.get("headers")
+            results["security_headers"] = web_result.get("security_headers")
+            results["technologies"] = web_result.get("technologies", [])
+            results["directories"] = web_result.get("directories", [])
+            results["forms"] = web_result.get("forms", [])
+            results["waf"] = web_result.get("waf")
+            
+            for v in web_result.get("vulnerabilities", []):
+                if v not in results["vulnerabilities"]:
+                    results["vulnerabilities"].append(v)
+            
+            if web_result.get("error"):
+                results["warnings"].append(f"Web: {web_result['error']}")
+            
+            print(f"  [✓] Scan web terminé: {len(results['vulnerabilities'])} vulnérabilités")
+            
+        except Exception as e:
+            results["warnings"].append(f"Erreur scan web: {str(e)[:100]}")
+            print(f"  [✗] Erreur scan web: {str(e)[:80]}")
+    
+    print(f"\n[✓] Scan terminé: {len(results['vulnerabilities'])} vulnérabilités trouvées")
+    return results
+
+def _log_action(action, detail, user):
+    """Enregistre une action dans les logs"""
+    log_entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "user": user,
+        "action": action,
+        "detail": detail,
+        "ip": request.remote_addr if request else "system"
+    }
+    
+    log_path = f"{Config.LOG_DIR}/audit.log"
+    with open(log_path, "a") as f:
+        f.write(json.dumps(log_entry) + "\n")
+
+# ============ LANCEMENT ============
+
+if __name__ == "__main__":
+    print("=" * 60)
+    print("  🔒 NOXSCAN SECURITY PLATFORM")
+    print("=" * 60)
+    print(f"  Interface : https://{Config.HOST}:{Config.PORT}")
+    print(f"  Compte    : admin / HackerAI_Pro_2026!")
+    print("=" * 60)
+    print("  [✓] Protection HTTPS activée")
+    print("  [✓] Authentification requise")
+    print("  [✓] Rate limiting actif")
+    print("  [✓] Logs d'audit")
+    print("  [✓] Contournement WAF (Cloudflare, Cloudfront)")
+    print("  [✓] Auto-défense (détection d'attaques)")
+    print("  [✓] En-têtes de sécurité")
+    print("=" * 60)
+    
+    # Génération automatique du certificat SSL si nécessaire
+    if not os.path.exists(Config.SSL_CERT):
+        os.makedirs("ssl", exist_ok=True)
+        print("\n[*] Génération du certificat SSL...")
+        subprocess.run([
+            "openssl", "req", "-x509", "-newkey", "rsa:2048",
+            "-keyout", Config.SSL_KEY,
+            "-out", Config.SSL_CERT,
+            "-days", "365", "-nodes",
+            "-subj", "/CN=localhost"
+        ])
+        print("[✓] Certificat SSL généré")
+    
+    app.run(
+        host=Config.HOST,
+        port=Config.PORT,
+        ssl_context=(Config.SSL_CERT, Config.SSL_KEY),
+        debug=False,
+        threaded=True
+    )

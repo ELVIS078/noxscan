@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+ssl/
+*.pem
+*.key
+scans/
+logs/
+rapports/
+exploit/
+.DS_Store
+*.db

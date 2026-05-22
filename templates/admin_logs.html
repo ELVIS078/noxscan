@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>NoxScan — Logs de {{ username }}</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #0a0c10; color: #d0d0d0; padding: 30px; }
+        .container { max-width: 1200px; margin: auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .header h1 { color: #00c853; }
+        .back { color: #666; text-decoration: none; font-size: 13px; }
+        pre { background: #0d0f14; padding: 20px; border-radius: 8px; font-size: 12px; max-height: 700px; overflow-y: auto; }
+        .empty { text-align: center; color: #555; padding: 40px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Logs de {{ username }}</h1>
+            <a href="/admin" class="back">← Retour</a>
+        </div>
+        {% if logs %}
+        <pre>{% for log in logs %}{{ log.timestamp }} — {{ log.action }} — {{ log.detail[:80] }}
+{% endfor %}</pre>
+        {% else %}
+        <div class="empty">Aucune activité pour cet utilisateur</div>
+        {% endif %}
+    </div>
+</body>
+</html>

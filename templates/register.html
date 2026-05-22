@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>NoxScan — Inscription</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #0a0c10; color: #d0d0d0; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        .card { background: #14171e; padding: 40px; border-radius: 12px; border: 1px solid #1e2128; width: 420px; max-width: 95%; }
+        h1 { color: #00c853; text-align: center; margin-bottom: 4px; }
+        p.sub { color: #666; text-align: center; margin-bottom: 24px; font-size: 13px; }
+        input { width: 100%; padding: 12px 14px; margin-bottom: 12px; background: #0a0c10; border: 1px solid #1e2128; border-radius: 6px; color: #e0e0e0; font-size: 14px; }
+        input:focus { outline: none; border-color: #00c853; }
+        button { width: 100%; padding: 12px; background: #00c853; border: none; border-radius: 6px; color: #000; font-size: 15px; font-weight: 700; cursor: pointer; }
+        button:hover { background: #00e676; }
+        .error { color: #ff1744; text-align: center; margin-bottom: 12px; font-size: 13px; background: #2a1a1a; padding: 8px; border-radius: 4px; }
+        .success { color: #00c853; text-align: center; margin-bottom: 12px; font-size: 13px; background: #0a1a0a; padding: 8px; border-radius: 4px; }
+        .link { text-align: center; margin-top: 16px; font-size: 13px; }
+        .link a { color: #2979ff; text-decoration: none; }
+        .link a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Créer un compte</h1>
+        <p class="sub">Inscrivez-vous pour utiliser NoxScan</p>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        {% if success %}<div class="success">{{ success }}</div>{% endif %}
+        <form method="POST">
+            <input type="text" name="username" placeholder="Nom d'utilisateur" required autofocus>
+            <input type="email" name="email" placeholder="Adresse email" required>
+            <input type="password" name="password" placeholder="Mot de passe (min 6 caractères)" required>
+            <input type="password" name="confirm_password" placeholder="Confirmer le mot de passe" required>
+            <button type="submit">S'inscrire</button>
+        </form>
+        <div class="link">
+            Déjà un compte ? <a href="/login">Connectez-vous</a>
+        </div>
+    </div>
+</body>
+</html>

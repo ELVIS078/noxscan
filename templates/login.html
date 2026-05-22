@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NoxScan — Connexion</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Segoe UI', -apple-system, Arial, sans-serif;
+            background: #0a0c10;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .login-card {
+            background: #14171e;
+            padding: 48px 40px;
+            border-radius: 12px;
+            border: 1px solid #1e2128;
+            width: 400px;
+            max-width: 95%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .logo { text-align: center; margin-bottom: 8px; }
+        .logo h1 { color: #00c853; font-size: 28px; }
+        .logo p { color: #666; font-size: 13px; margin-top: 4px; }
+        form { margin-top: 32px; }
+        .input-group { margin-bottom: 16px; }
+        .input-group label { display: block; color: #888; font-size: 12px; text-transform: uppercase; margin-bottom: 6px; font-weight: 600; }
+        .input-group input {
+            width: 100%; padding: 14px 16px;
+            background: #0a0c10; border: 1px solid #1e2128;
+            border-radius: 8px; color: #e0e0e0; font-size: 15px;
+            transition: all 0.2s;
+        }
+        .input-group input:focus { outline: none; border-color: #00c853; box-shadow: 0 0 0 3px rgba(0,200,83,0.15); }
+        button {
+            width: 100%; padding: 14px; background: #00c853;
+            border: none; border-radius: 8px; color: #000;
+            font-size: 16px; font-weight: 700; cursor: pointer;
+            margin-top: 8px; transition: all 0.2s;
+        }
+        button:hover { background: #00e676; transform: translateY(-1px); }
+        .error { background: #2a1a1a; color: #ff1744; padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; text-align: center; border: 1px solid #3a1a1a; }
+        .security { text-align: center; margin-top: 24px; font-size: 11px; color: #444; }
+        .security span { color: #00c853; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="logo">
+            <h1>🔒 NoxScan</h1>
+            <p>Plateforme d'audit de sécurité professionnelle</p>
+        </div>
+        <div style="text-align:center;margin-top:16px;font-size:13px;"><a href="/register" style="color:#2979ff;text-decoration:none;">Créer un compte</a> · <a href="/forgot" style="color:#666;text-decoration:none;">Mot de passe oublié</a></div>
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+        <form method="POST">
+            <div class="input-group">
+                <label>Identifiant</label>
+                <input type="text" name="username" placeholder="Nom d'utilisateur" required autofocus>
+            </div>
+            <div class="input-group">
+                <label>Mot de passe</label>
+                <input type="password" name="password" placeholder="Mot de passe" required>
+            </div>
+            <button type="submit">Se connecter</button>
+        </form>
+        <div class="security">
+            <span>🔐</span> Connexion sécurisée — HTTPS activé
+        </div>
+    </div>
+</body>
+</html>

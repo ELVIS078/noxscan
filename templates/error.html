@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NoxScan — Erreur {{ code }}</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Segoe UI', -apple-system, Arial, sans-serif; background: #0a0c10; color: #d0d0d0; height: 100vh; display: flex; justify-content: center; align-items: center; text-align: center; }
+        .card { background: #14171e; padding: 60px; border-radius: 16px; border: 1px solid #1e2128; max-width: 500px; }
+        .code { font-size: 72px; font-weight: 700; color: #ff1744; }
+        .message { font-size: 20px; margin: 16px 0 30px; color: #888; }
+        .btn { padding: 14px 28px; background: #00c853; border-radius: 8px; color: #000; text-decoration: none; font-weight: 700; display: inline-block; }
+        .btn:hover { background: #00e676; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="code">{{ code }}</div>
+        <div class="message">{{ message }}</div>
+        <a href="/" class="btn">Retour au tableau de bord</a>
+    </div>
+</body>
+</html>

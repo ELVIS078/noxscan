@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NoxScan — Logs</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Segoe UI', -apple-system, Arial, sans-serif; background: #0a0c10; color: #d0d0d0; padding: 30px; }
+        .container { max-width: 1400px; margin: auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .header h1 { color: #00c853; font-size: 28px; }
+        .back { color: #666; text-decoration: none; font-size: 13px; }
+        .back:hover { color: #aaa; }
+        pre { background: #0d0f14; padding: 24px; border-radius: 12px; font-size: 12px; max-height: 700px; overflow-y: auto; line-height: 1.8; }
+        .empty { text-align: center; color: #555; padding: 40px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Logs d'Audit</h1>
+            <a href="/" class="back">← Retour</a>
+        </div>
+        {% if logs %}<pre>{% for log in logs %}{{ log.timestamp }} — {{ log.user }} — {{ log.action }} — {{ log.detail[:80] }}
+{% endfor %}</pre>{% else %}<div class="empty">Aucun log pour le moment</div>{% endif %}
+    </div>
+</body>
+</html>
