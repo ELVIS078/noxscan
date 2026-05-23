@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="3">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan en cours - NoxScan</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #0a0a1a; color: #e0e0e0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .card { background: #12122a; border: 1px solid #2a2a5a; border-radius: 16px; padding: 40px; text-align: center; max-width: 500px; box-shadow: 0 0 40px rgba(0, 255, 136, 0.05); }
+        .loader { border: 4px solid #1a1a3e; border-top: 4px solid #00ff88; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; margin: 0 auto 24px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        h1 { color: #00ff88; font-size: 24px; margin-bottom: 12px; }
+        p { color: #8888aa; line-height: 1.6; }
+        .badge { display: inline-block; background: #1a1a3e; color: #00ff88; padding: 6px 14px; border-radius: 20px; font-size: 13px; margin-top: 16px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="loader"></div>
+        <h1>🔍 Scan en cours</h1>
+        <p>Analyse de la cible en cours...<br>Cette page se rafraîchit automatiquement.</p>
+        <div class="badge">ID: {{ scan_id[:12] }}...</div>
+    </div>
+</body>
+</html>

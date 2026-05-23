@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-NoxScan Security Platform — Version Render
+NoxScan Security Platform — Version Render optimisée
+Scans asynchrones + timeout augmenté
 """
 
 from flask import Flask, request, render_template, redirect, jsonify, session, send_file, abort
@@ -9,6 +10,7 @@ import os
 import secrets
 import time
 import re
+import threading
 from datetime import datetime
 from functools import wraps
 from config import Config
@@ -23,6 +25,54 @@ for d in [Config.SCAN_DIR, Config.LOG_DIR, Config.REPORT_DIR, "exploit"]:
     os.makedirs(d, exist_ok=True)
 
 failed_logins = {}
+
+# ============ FILE DES SCANS ASYNCHRONES ============
+scan_status = {}
+
+def run_scan_async(scan_id, target, scan_type, username):
+    """Lance le scan dans un thread séparé pour éviter le timeout Gunicorn"""
+    try:
+        scan_status[scan_id] = {"status": "running", "progress": 0, "started": time.time()}
+        
+        url = target if target.startswith("http") else f"https://{target}"
+        web = WebScanner(url)
+        web_result = web.scan_all()
+        
+        results = {
+            "scan_id": scan_id,
+            "target": target,
+            "url": url,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "type": scan_type,
+            "status": "completed",
+            "user": username,
+            "user_role": "user",
+            "vulnerabilities": web_result.get("vulnerabilities", []),
+            "technologies": web_result.get("technologies", []),
+            "headers": web_result.get("headers", {}),
+            "waf": web_result.get("waf"),
+            "status_code": web_result.get("status_code"),
+            "title": web_result.get("title"),
+            "server": web_result.get("server"),
+            "forms": web_result.get("forms", []),
+            "links": web_result.get("links", []),
+            "directories": web_result.get("directories", []),
+            "exploitation": []
+        }
+        
+        with open(f"{Config.SCAN_DIR}/{scan_id}.json", "w") as f:
+            json.dump(results, f, indent=2)
+        
+        scan_status[scan_id] = {"status": "done"}
+        
+        # Nettoyage des vieux status
+        for sid in list(scan_status.keys()):
+            if scan_status[sid].get("started", 0) < time.time() - 3600:
+                del scan_status[sid]
+                
+    except Exception as e:
+        scan_status[scan_id] = {"status": "error", "error": str(e)[:200]}
+        _log_action("scan_error", f"{target}: {str(e)[:200]}", username)
 
 # ============ SÉCURITÉ ============
 
@@ -167,39 +217,36 @@ def new_scan():
         _log_action("scan_start", f"{target}", session['username'])
         scan_id = secrets.token_hex(8)
         
-        try:
-            from scanner.web_scanner import WebScanner
-            url = target if target.startswith("http") else f"https://{target}"
-            web = WebScanner(url)
-            web_result = web.scan_all()
-            
-            results = {
-                "scan_id": scan_id,
-                "target": target,
-                "url": url,
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "type": scan_type,
-                "status": "completed",
-                "user": session['username'],
-                "user_role": session['role'],
-                "vulnerabilities": web_result.get("vulnerabilities", []),
-                "technologies": web_result.get("technologies", []),
-                "headers": web_result.get("headers", {}),
-                "waf": web_result.get("waf"),
-                "status_code": web_result.get("status_code"),
-                "title": web_result.get("title"),
-                "server": web_result.get("server"),
-                "exploitation": []
-            }
-            
-            with open(f"{Config.SCAN_DIR}/{scan_id}.json", "w") as f:
-                json.dump(results, f, indent=2)
-            
-            return redirect(f"/results/{scan_id}")
-        except Exception as e:
-            return render_template("scan.html", error=f"Erreur: {str(e)[:200]}")
+        # LANCE LE SCAN DANS UN THREAD SÉPARÉ
+        t = threading.Thread(
+            target=run_scan_async,
+            args=(scan_id, target, scan_type, session['username']),
+            daemon=True
+        )
+        t.start()
+        
+        # Redirige vers la page "en cours"
+        return redirect(f"/scanning/{scan_id}")
     
     return render_template("scan.html")
+
+@app.route("/scanning/<scan_id>")
+@login_required
+def scanning_progress(scan_id):
+    """Page de progression — refresh automatique toutes les 3s"""
+    path = f"{Config.SCAN_DIR}/{scan_id}.json"
+    status = scan_status.get(scan_id, {"status": "unknown"})
+    
+    if os.path.exists(path):
+        # Scan terminé
+        return redirect(f"/results/{scan_id}")
+    elif status["status"] == "error":
+        return render_template("scan.html", error=f"Erreur: {status.get('error', 'Inconnue')}")
+    else:
+        # En cours
+        return render_template("scanning.html", scan_id=scan_id), 200, {
+            'Refresh': '3'
+        }
 
 @app.route("/results/<scan_id>")
 @login_required
@@ -354,6 +401,17 @@ def admin_user_logs(username):
                         pass
     return render_template("admin_logs.html", username=username, logs=logs[-100:][::-1])
 
+# ============ API STATUS (pour polling JS si besoin) ============
+
+@app.route("/api/scan-status/<scan_id>")
+@login_required
+def api_scan_status(scan_id):
+    path = f"{Config.SCAN_DIR}/{scan_id}.json"
+    if os.path.exists(path):
+        return jsonify({"status": "done"})
+    status = scan_status.get(scan_id, {"status": "unknown"})
+    return jsonify(status)
+
 # ============ GESTION ERREURS ============
 
 @app.errorhandler(404)
@@ -386,6 +444,9 @@ def save_users(users):
         json.dump(users, f, indent=2)
 
 def register_user(username, password, email):
+    users = load_users()
+    if username in users:
+        return {"success": False, "def register_user(username, password, email):
     users = load_users()
     if username in users:
         return {"success": False, "error": "Ce nom existe déjà"}

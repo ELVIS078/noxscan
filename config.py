@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Configuration NoxScan"""
-
+"""Configuration NoxScan — Version Render free tier"""
 import os
 import secrets
 
@@ -8,14 +7,13 @@ class Config:
     SECRET_KEY = secrets.token_hex(32)
     
     USERS = {
-        "admin": {
-            "password": "NoxScan_Admin_2026!",
+        "userman": {
+            "password": "Hacker_Pro_2005",
             "role": "admin",
             "email": "admin@noxscan.app"
         }
     }
     
-    # Render fournit le PORT dans les variables d'environnement
     HOST = "0.0.0.0"
     PORT = int(os.environ.get("PORT", 10000))
     
@@ -30,6 +28,17 @@ class Config:
     REPORT_DIR = "rapports"
     USERS_DB = "users.json"
     
+    # Limites Render free tier (512 MB)
     TOOLS = {}
     API_RATE_LIMIT = 30
-    WEB_MODE = True  # Mode scan web uniquement (pas de Nmap sur Render)
+    WEB_MODE = True
+    
+    SCAN_TIMEOUT = 300
+    WHATWEB_TIMEOUT = 15
+    GOBUSTER_TIMEOUT = 60
+    GOBUSTER_THREADS = 10
+    REQUEST_TIMEOUT = 8
+    MAX_DIRECTORIES = 30
+    MAX_LINKS = 20
+    SQLI_TEST_LIMIT = 20
+    XSS_TEST_LIMIT = 15

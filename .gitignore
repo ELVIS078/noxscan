@@ -1,12 +1,10 @@
 __pycache__/
 *.pyc
 *.pyo
-ssl/
-*.pem
-*.key
+.env
+venv/
+*.json
+!requirements.txt
 scans/
 logs/
 rapports/
-exploit/
-.DS_Store
-*.db
