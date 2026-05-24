@@ -37,19 +37,38 @@ class WebScanner:
         return self.results
 
     def _check_basic_info(self):
-        try:
-            r = self.session.get(self.url, timeout=Config.REQUEST_TIMEOUT)
-            self.results["status_code"]=r.status_code
-            self.results["headers"]=dict(r.headers)
-            self.results["server"]=r.headers.get("Server","Inconnu")
-            m=re.search(r'<title>(.*?)</title>',r.text,re.IGNORECASE|re.DOTALL)
-            if m: self.results["title"]=m.group(1).strip()
-            links=re.findall(r'href=["\'](https?://[^"\']+)["\']',r.text)
-            self.results["links"]=list(set(links))[:Config.MAX_LINKS]
-            print("  [+] Status:",r.status_code)
-        except Exception as e:
-            self.results["error"]=str(e)[:100]
-            print("  [!]",str(e)[:50])
+    """Informations de base sur le site"""
+    try:
+        # Essai HTTPS d'abord
+        r = self.session.get(self.url, timeout=Config.REQUEST_TIMEOUT, verify=False)
+        self.results["status_code"] = r.status_code
+        self.results["headers"] = dict(r.headers)
+        self.results["server"] = r.headers.get("Server", "Inconnu")
+        
+        title_match = re.search(r'<title>(.*?)</title>', r.text, re.IGNORECASE | re.DOTALL)
+        if title_match:
+            self.results["title"] = title_match.group(1).strip()
+        
+        links = re.findall(r'href=["\'](https?://[^"\']+)["\']', r.text)
+        self.results["links"] = list(set(links))[:Config.MAX_LINKS]
+        print(f"  [✓] Site: {r.status_code}")
+        return  # On arrête ici si réussi
+    except Exception as e:
+        print(f"  [!] HTTPS: {str(e)[:60]}")
+    
+    # Si HTTPS échoue, essayer HTTP
+    try:
+        http_url = self.url.replace("https://", "http://")
+        r = self.session.get(http_url, timeout=Config.REQUEST_TIMEOUT, verify=False)
+        self.results["status_code"] = r.status_code
+        self.results["headers"] = dict(r.headers)
+        self.results["server"] = r.headers.get("Server", "Inconnu")
+        # Mettre à jour l'URL vers HTTP
+        self.url = http_url
+        print(f"  [✓] Site (HTTP): {r.status_code}")
+    except Exception as e:
+        self.results["error"] = f"Site inaccessible: {str(e)[:100]}"
+        print(f"  [✗] {str(e)[:100]}")
 
     def _check_security_headers(self):
         h=self.results.get("headers",{})
