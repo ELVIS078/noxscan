@@ -38,7 +38,12 @@ except Exception as e:
 
 app = Flask(__name__)
 app.secret_key = Config.SECRET_KEY
-for d in [Config.SCAN_DIR, Config.LOG_DIR, Config.REPORT_DIR]:
+
+# Crée le compte admin s'il n'existe pas
+from config import ensure_admin
+ensure_admin()
+
+for d in [Config.SCAN_DIR, Config.LOG_DIR, Config.REPORT_DIR, "exploit"]:
     os.makedirs(d, exist_ok=True)
 
 failed_logins = {}
