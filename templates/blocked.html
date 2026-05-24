@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Accès bloqué - NoxScan</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;background:#0a0a1a;color:#e0e0e0;display:flex;justify-content:center;align-items:center;min-height:100vh}.card{background:#12122a;border:1px solid #ff4444;border-radius:16px;padding:40px;max-width:500px;text-align:center;box-shadow:0 0 40px rgba(255,0,0,0.1)}h1{color:#ff4444;font-size:24px;margin-bottom:12px}.icon{font-size:48px;margin-bottom:16px}p{color:#8888aa;line-height:1.6;margin-bottom:8px}.ip{color:#ff8800;font-family:monospace;font-size:14px;margin:12px 0}.btn{display:inline-block;padding:10px 20px;background:#ff4444;color:#fff;border-radius:8px;text-decoration:none;margin-top:16px;margin-right:8px}form{margin-top:20px;text-align:left}label{color:#8888aa;font-size:13px}input[type=email],input[type=text]{width:100%;padding:10px;background:#1a1a3e;border:1px solid #ff4444;border-radius:6px;color:#e0e0e0;margin:6px 0 12px}button{padding:10px 20px;background:#ff4444;color:#fff;border:none;border-radius:6px;cursor:pointer}</style></head>
+<body>
+<div class="card">
+<div class="icon">🚫</div>
+<h1>Accès bloqué</h1>
+<p>Votre accès a été temporairement bloqué<br>pour cause de tentatives suspectes.</p>
+<div class="ip">IP: {{ ip }}</div>
+{% if message %}<p style="color:#00ff88">{{ message }}</p>{% endif %}
+<form method="POST" action="/unblock-me">
+<label>Email (optionnel)</label>
+<input type="email" name="email" placeholder="votre@email.com">
+<label>Justification</label>
+<input type="text" name="reason" placeholder="Pourquoi etes-vous bloque ?">
+<button type="submit">Demander le déblocage</button>
+</form>
+</div>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Alertes sécurité - Admin - NoxScan</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#0a0a1a;color:#e0e0e0;display:flex;min-height:100vh}
+.sidebar{width:240px;background:#0d0d22;padding:20px;border-right:1px solid #1a1a3e}
+.sidebar h2{color:#00ff88;font-size:18px;margin-bottom:20px}
+.sidebar a{display:block;color:#8888aa;padding:10px;border-radius:8px;text-decoration:none;margin-bottom:4px}
+.sidebar a:hover,.sidebar a.active{background:#1a1a3e;color:#00ff88}
+.main{flex:1;padding:30px}
+h1{color:#fff;font-size:24px;margin-bottom:24px}
+.stats{display:flex;gap:20px;margin-bottom:30px}
+.stat-card{background:#12122a;border:1px solid #2a2a5a;border-radius:12px;padding:20px;flex:1;text-align:center}
+.stat-card .number{font-size:32px;font-weight:bold;color:#00ff88}
+.stat-card .label{color:#8888aa;font-size:14px;margin-top:4px}
+.alert-item{background:#12122a;border:1px solid #2a2a5a;border-radius:8px;padding:16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.alert-item .time{color:#8888aa;font-size:12px}
+.alert-item .detail{color:#c0c0e0;font-size:14px}
+.alert-blocked{border-left:3px solid #ff4444}
+.alert-scan{border-left:3px solid #00ff88}
+.alert-info{border-left:3px solid #ffaa00}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold}
+.badge-red{background:#3a0a0a;color:#ff4444}
+.badge-yellow{background:#3a2a0a;color:#ffaa00}
+.badge-green{background:#0a3a0a;color:#00ff88}
+</style>
+</head>
+<body>
+<div class="sidebar">
+<h2>🔒 NoxScan Admin</h2>
+<a href="/admin">Dashboard</a>
+<a href="/admin/ips">IP bloquées</a>
+<a href="/admin/alertes" class="active">Alertes</a>
+<a href="/">← Retour</a>
+</div>
+<div class="main">
+<h1>🚨 Alertes de sécurité attention </h1>
+
+<div class="stats">
+<div class="stat-card"><div class="number">{{ alertes|length }}</div><div class="label">Événements</div></div>
+<div class="stat-card"><div class="number">{{ blocked_count }}</div><div class="label">IP bloquées</div></div>
+</div>
+
+{% for alerte in alertes %}
+<div class="alert-item alert-{% if 'block' in alerte.action %}blocked{% elif 'scan' in alerte.action %}scan{% else %}info{% endif %}">
+<div>
+<div class="detail">
+<span class="badge {% if 'block' in alerte.action %}badge-red{% elif 'failed' in alerte.action %}badge-yellow{% else %}badge-green{% endif %}">{{ alerte.action }}</span>
+{{ alerte.detail[:80] }}
+</div>
+<div class="time">{{ alerte.timestamp }} - IP: {{ alerte.ip }} - User: {{ alerte.user }}</div>
+</div>
+</div>
+{% else %}
+<div style="text-align:center;color:#8888aa;padding:40px">Aucune alerte pour le moment</div>
+{% endfor %}
+</div>
+</body>
+</html>
