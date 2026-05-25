@@ -7,10 +7,10 @@ class Config:
     SECRET_KEY = secrets.token_hex(32)
     
     USERS = {
-        "userman": {
+        "admin": {
             "password": "Hacker_Pro_2005",
             "role": "admin",
-            "email": "admin@noxscan.app"
+            "email": "hountondjielvis07@gmail.com"
         }
     }
     
@@ -28,7 +28,6 @@ class Config:
     REPORT_DIR = "rapports"
     USERS_DB = "users.json"
     
-    # Limites Render free tier (512 MB)
     TOOLS = {}
     API_RATE_LIMIT = 30
     WEB_MODE = True
@@ -42,35 +41,3 @@ class Config:
     MAX_LINKS = 20
     SQLI_TEST_LIMIT = 20
     XSS_TEST_LIMIT = 15
-
-import json, os
-from datetime import datetime
-
-def ensure_admin():
-    db = "users.json"
-    users = {}
-    if os.path.exists(db):
-        try:
-            with open(db) as f:
-                users = json.load(f)
-        except:
-            pass
-    if "admin" not in users:
-        users["admin"] = {
-            "password": "NoxScan_Admin_2026!",
-            "email": "admin@noxscan.app",
-            "role": "admin",
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "last_login": None,
-            "total_scans": 0,
-            "blocked": False
-        }
-        with open(db, "w") as f:
-            json.dump(users, f, indent=2)
-        print("[✓] Compte admin créé dans users.json")
-    for u, data in users.items():
-        if data.get("role") == "admin" and data.get("blocked"):
-            users[u]["blocked"] = False
-            with open(db, "w") as f:
-                json.dump(users, f, indent=2)
-            print(f"[✓] Admin {u} débloqué")
