@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Administration - NoxScan</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;background:#0a0a1a;color:#e0e0e0;display:flex;min-height:100vh}
+.sidebar{width:240px;background:#0d0d22;padding:20px;border-right:1px solid #1a1a3e;display:flex;flex-direction:column}
+.sidebar h2{color:#00ff88;font-size:18px;margin-bottom:4px}
+.sidebar .role-badge{color:#ffaa00;font-size:11px;margin-bottom:20px}
+.sidebar a{display:block;color:#8888aa;padding:10px;border-radius:8px;text-decoration:none;margin-bottom:4px}
+.sidebar a:hover,.sidebar a.active{background:#1a1a3e;color:#00ff88}
+.sidebar .spacer{flex:1}
+.sidebar .logout{color:#ff4444}
+.main{flex:1;padding:30px}
+h1{color:#fff;font-size:24px;margin-bottom:24px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:30px}
+.stat-card{background:#12122a;border:1px solid #2a2a5a;border-radius:12px;padding:20px;text-align:center}
+.stat-card .num{font-size:30px;font-weight:bold}
+.stat-card .lbl{color:#8888aa;font-size:13px;margin-top:4px}
+.stat-green .num{color:#00ff88}
+.stat-red .num{color:#ff4444}
+.stat-yellow .num{color:#ffaa00}
+.stat-blue .num{color:#00aaff}
+.section{margin-bottom:30px}
+.section h3{color:#00ff88;margin-bottom:14px;font-size:16px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px;text-align:left;border-bottom:1px solid #1a1a3e}
+th{color:#00ff88;font-size:12px;text-transform:uppercase}
+td{color:#c0c0e0;font-size:13px}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold}
+.badge-red{background:#3a0a0a;color:#ff4444}
+.badge-yellow{background:#3a2a0a;color:#ffaa00}
+.badge-green{background:#0a3a0a;color:#00ff88}
+.badge-blue{background:#0a0a3a;color:#00aaff}
+.btn{display:inline-block;padding:6px 12px;border-radius:6px;text-decoration:none;font-size:12px;margin:1px}
+.btn-green{background:#00ff88;color:#0a0a1a}
+.btn-red{background:#ff4444;color:#fff}
+.btn-outline{border:1px solid #2a2a5a;color:#8888aa}
+.log-item{background:#12122a;border:1px solid #2a2a5a;border-radius:8px;padding:12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.log-item .time{color:#8888aa;font-size:11px}
+.log-item .detail{color:#c0c0e0;font-size:13px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+</style></head>
+<body>
+<div class="sidebar">
+<h2>🔒 NoxScan</h2>
+<div class="role-badge">👑 Administrateur</div>
+<a href="/admin/dashboard" class="active">📊 Dashboard</a>
+<a href="/admin/users">👥 Utilisateurs</a>
+<a href="/admin/scans">📋 Scans</a>
+<a href="/admin/ips">🌐 IP bloquées</a>
+<a href="/admin/alertes">🚨 Alertes</a>
+<a href="/admin/logs">📝 Logs</a>
+<div class="spacer"></div>
+<a href="/dashboard">← Interface utilisateur</a>
+<a href="/logout" class="logout">🚪 Déconnexion</a>
+</div>
+<div class="main">
+<h1>👑 Panneau d'Administration</h1>
+
+<div class="stats">
+<div class="stat-card stat-green"><div class="num">{{ total_users }}</div><div class="lbl">Utilisateurs</div></div>
+<div class="stat-card stat-blue"><div class="num">{{ total_scans }}</div><div class="lbl">Scans total</div></div>
+<div class="stat-card stat-green"><div class="num">{{ active_users }}</div><div class="lbl">Actifs</div></div>
+<div class="stat-card stat-red"><div class="num">{{ blocked_users }}</div><div class="lbl">Bloqués</div></div>
+<div class="stat-card stat-yellow"><div class="num">{{ blocked_ips|length }}</div><div class="lbl">IP bloquées</div></div>
+</div>
+
+<div class="grid-2">
+<div class="section">
+<h3>👥 Utilisateurs</h3>
+<table>
+<tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Scans</th><th>Statut</th></tr>
+{% for u in users[:10] %}
+<tr>
+<td>{{ u.username }}</td><td>{{ u.email[:20] }}</td>
+<td>{% if u.role=='admin' %}<span class="badge badge-red">Admin</span>{% else %}<span class="badge badge-blue">User</span>{% endif %}</td>
+<td>{{ u.total_scans }}</td>
+<td>{% if u.blocked %}<span class="badge badge-red">Bloqué</span>{% else %}<span class="badge badge-green">Actif</span>{% endif %}</td>
+</tr>
+{% endfor %}
+</table>
+<a href="/admin/users" class="btn btn-outline" style="margin-top:8px">Voir tous les utilisateurs →</a>
+</div>
+
+<div class="section">
+<h3>🌐 Dernières IP bloquées</h3>
+{% if blocked_ips %}
+{% for ip, info in blocked_ips.items()|dictsort(false, 'value')|reverse if loop.index <= 5 %}
+<div class="log-item">
+<div><span class="detail">{{ ip }}</span><br><span class="time">{{ info.get('reason','?') }}</span></div>
+<a href="/admin/unblock-ip/{{ ip }}" class="btn btn-green">Débloquer</a>
+</div>
+{% endfor %}
+{% else %}
+<p style="color:#8888aa">Aucune IP bloquée</p>
+{% endif %}
+<a href="/admin/ips" class="btn btn-outline" style="margin-top:8px">Gérer les IP →</a>
+</div>
+</div>
+
+<div class="section">
+<h3>📋 Activité récente</h3>
+{% for log in logs[:10] %}
+<div class="log-item">
+<div>
+<span class="badge {% if 'block' in log.action %}badge-red{% elif 'error' in log.action %}badge-yellow{% else %}badge-green{% endif %}">{{ log.action }}</span>
+<span class="detail">{{ log.detail[:60] }}</span>
+<span class="time">{{ log.timestamp }} - {{ log.user }}</span>
+</div>
+</div>
+{% else %}
+<p style="color:#8888aa;padding:20px;text-align:center">Aucune activité récente</p>
+{% endfor %}
+</div>
+</div>
+</body>
+</html>
