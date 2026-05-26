@@ -475,19 +475,34 @@ def health():
 def admin_dashboard():
     users = get_all_users()
     blocked_ips = load_blocked_ips()
-    total_scans = sum(u.get("total_scans", 0) for u in users)
-    blocked_users = sum(1 for u in users if u.get("blocked"))
-    active_users = sum(1 for u in users if u.get("last_login") and u.get("last_login") != "Jamais")
+    total_scans = sum(u.get("total_scans", 0) for u in users) if users else 0
+    blocked_users = sum(1 for u in users if u.get("blocked")) if users else 0
+    active_users = sum(1 for u in users if u.get("last_login") and u.get("last_login") != "Jamais") if users else 0
+    
+    # Logs
     logs = []
     lp = Config.LOG_DIR + "/audit.log"
-    if os.path.exists(lp):
-        with open(lp) as f:
-            for l in f:
-                l = l.strip()
-                if l:
-                    try: logs.append(json.loads(l))
-                    except: pass
-    return render_template("admin_dashboard.html", total_users=len(users), total_scans=total_scans, blocked_users=blocked_users, active_users=active_users, users=users, blocked_ips=blocked_ips, logs=logs[-30:][::-1])
+    if os.path.exists(lp) and os.path.getsize(lp) > 0:
+        try:
+            with open(lp) as f:
+                for l in f:
+                    l = l.strip()
+                    if l:
+                        try: logs.append(json.loads(l))
+                        except: pass
+        except: pass
+    
+    # Forcer le rechargement des fichiers
+    _log_action("admin_view", "Dashboard consulte", session.get('username', 'admin'))
+    
+    return render_template("admin_dashboard.html", 
+        total_users=len(users) if users else 0, 
+        total_scans=total_scans, 
+        blocked_users=blocked_users, 
+        active_users=active_users, 
+        users=users if users else [],
+        blocked_ips=blocked_ips if blocked_ips else {},
+        logs=logs[-30:][::-1] if logs else [])
 
 @app.route("/admin/users")
 @admin_required
