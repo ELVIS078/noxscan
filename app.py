@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""NoxScan Security Platform — VERSION FINALE"""
+"""NoxScan Security Platform — VERSION CORRIGEE (chemins absolus + persistance)"""
 from flask import Flask, request, render_template, redirect, jsonify, session, send_file, abort
 import json, os, secrets, time, re, threading
 from datetime import datetime
 from functools import wraps
 from config import Config
 from collections import defaultdict
+
+# === CHEMIN ABSOLU ===
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 web_scanner_ok = False
 try:
@@ -32,23 +35,48 @@ except Exception as e:
 
 app = Flask(__name__)
 app.secret_key = Config.SECRET_KEY
-for d in [Config.SCAN_DIR, Config.LOG_DIR, Config.REPORT_DIR]:
+
+# Création des dossiers avec chemins ABSOLUS
+SCAN_DIR = os.path.join(BASE_DIR, "scan_results")
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+REPORT_DIR = os.path.join(BASE_DIR, "rapports")
+for d in [SCAN_DIR, LOG_DIR, REPORT_DIR]:
     os.makedirs(d, exist_ok=True)
 
 failed_logins = {}
 scan_status = {}
-BLOCKED_IPS_FILE = "blocked_ips.json"
+BLOCKED_IPS_FILE = os.path.join(BASE_DIR, "blocked_ips.json")
+USERS_DB = os.path.join(BASE_DIR, "users.json")
 login_attempts = defaultdict(list)
 reset_tokens = {}
 
+# === FONCTIONS DE CHARGEMENT/SAUVEGARDE ===
+
 def load_blocked_ips():
     if os.path.exists(BLOCKED_IPS_FILE):
-        try: return json.load(open(BLOCKED_IPS_FILE))
-        except: pass
+        try:
+            with open(BLOCKED_IPS_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            pass
     return {}
 
 def save_blocked_ips(blocked):
-    json.dump(blocked, open(BLOCKED_IPS_FILE, "w"), indent=2)
+    with open(BLOCKED_IPS_FILE, "w") as f:
+        json.dump(blocked, f, indent=2)
+
+def load_users():
+    if os.path.exists(USERS_DB):
+        try:
+            with open(USERS_DB, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def save_users(users):
+    with open(USERS_DB, "w", encoding='utf-8') as f:
+        json.dump(users, f, indent=2, ensure_ascii=False)
 
 def get_client_ip():
     if request.headers.get("X-Forwarded-For"):
@@ -59,8 +87,10 @@ def is_ip_blocked(ip):
     blocked = load_blocked_ips()
     if ip in blocked:
         info = blocked[ip]
-        if info.get("permanent"): return True
-        if time.time() - info.get("blocked_at", 0) < 86400: return True
+        if info.get("permanent"):
+            return True
+        if time.time() - info.get("blocked_at", 0) < 86400:
+            return True
         else:
             del blocked[ip]
             save_blocked_ips(blocked)
@@ -68,12 +98,19 @@ def is_ip_blocked(ip):
 
 def check_rate_limit():
     ip = get_client_ip()
-    if is_ip_blocked(ip): return False, "IP bloquee"
+    if is_ip_blocked(ip):
+        return False, "IP bloquee"
     now = time.time()
     login_attempts[ip] = [t for t in login_attempts[ip] if now - t < 300]
     if len(login_attempts[ip]) >= Config.FAILED_LOGIN_LIMIT:
         blocked = load_blocked_ips()
-        blocked[ip] = {"ip": ip, "blocked_at": now, "reason": "Trop de tentatives", "attempts": len(login_attempts[ip]), "permanent": False}
+        blocked[ip] = {
+            "ip": ip,
+            "blocked_at": now,
+            "reason": "Trop de tentatives",
+            "attempts": len(login_attempts[ip]),
+            "permanent": False
+        }
         save_blocked_ips(blocked)
         _log_action("ip_blocked", "IP " + ip + " bloquee", "system")
         return False, "IP bloquee"
@@ -90,15 +127,48 @@ def run_scan_async(scan_id, target, scan_type, username):
             web = WebScanner(url)
             web_result = web.scan_all()
         else:
-            web_result = {"url": url, "status_code": None, "title": None, "server": None, "technologies": [], "headers": {}, "security_headers": {}, "forms": [], "links": [], "directories": [], "sqli": [], "xss": [], "lfi_rfi": [], "ssti": [], "vulnerabilities": [], "waf": None, "subdomains": []}
-        results = {"scan_id": scan_id, "target": target, "url": url, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "type": scan_type, "status": "completed", "user": username, "user_role": "user", "vulnerabilities": web_result.get("vulnerabilities", []), "technologies": web_result.get("technologies", []), "headers": web_result.get("headers", {}), "waf": web_result.get("waf"), "status_code": web_result.get("status_code"), "title": web_result.get("title"), "server": web_result.get("server"), "forms": web_result.get("forms", []), "links": web_result.get("links", []), "directories": web_result.get("directories", []), "exploitation": []}
-        with open(Config.SCAN_DIR + "/" + scan_id + ".json", "w") as f:
+            web_result = {
+                "url": url, "status_code": None, "title": None, "server": None,
+                "technologies": [], "headers": {}, "security_headers": {},
+                "forms": [], "links": [], "directories": [],
+                "sqli": [], "xss": [], "lfi_rfi": [], "ssti": [],
+                "vulnerabilities": [], "waf": None, "subdomains": []
+            }
+        
+        results = {
+            "scan_id": scan_id,
+            "target": target,
+            "url": url,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "type": scan_type,
+            "status": "completed",
+            "user": username,
+            "user_role": "user",
+            "vulnerabilities": web_result.get("vulnerabilities", []),
+            "technologies": web_result.get("technologies", []),
+            "headers": web_result.get("headers", {}),
+            "waf": web_result.get("waf"),
+            "status_code": web_result.get("status_code"),
+            "title": web_result.get("title"),
+            "server": web_result.get("server"),
+            "forms": web_result.get("forms", []),
+            "links": web_result.get("links", []),
+            "directories": web_result.get("directories", []),
+            "exploitation": []
+        }
+        
+        result_path = os.path.join(SCAN_DIR, scan_id + ".json")
+        with open(result_path, "w") as f:
             json.dump(results, f, indent=2)
+        
         scan_status[scan_id] = {"status": "done"}
+        
+        # Mise à jour du compteur de scans utilisateur
         us = load_users()
         if username in us:
             us[username]["total_scans"] = us[username].get("total_scans", 0) + 1
             save_users(us)
+            
     except Exception as e:
         scan_status[scan_id] = {"status": "error", "error": str(e)[:200]}
 
@@ -141,25 +211,23 @@ def anti_intrusion_check():
     if is_ip_blocked(ip):
         return render_template("blocked.html", ip=ip), 403
 
-USERS_DB = "users.json"
-
-def load_users():
-    if os.path.exists(USERS_DB):
-        try: return json.load(open(USERS_DB))
-        except: pass
-    return {}
-
-def save_users(users):
-    json.dump(users, open(USERS_DB, "w"), indent=2)
-
 def register_user(username, password, email):
     us = load_users()
     if username in us:
         return {"success": False, "error": "Ce nom existe deja"}
     if len(password) < 6:
         return {"success": False, "error": "Mot de passe trop court"}
-    us[username] = {"password": password, "email": email, "role": "user", "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "last_login": None, "total_scans": 0, "blocked": False}
+    us[username] = {
+        "password": password,
+        "email": email,
+        "role": "user",
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "last_login": None,
+        "total_scans": 0,
+        "blocked": False
+    }
     save_users(us)
+    _log_action("register", "Nouvel utilisateur: " + username, username)
     return {"success": True}
 
 def authenticate_user(username, password):
@@ -192,18 +260,36 @@ def block_user(username, block=True):
     if username in us and us[username].get("role") != "admin":
         us[username]["blocked"] = block
         save_users(us)
+        _log_action("block_user" if block else "unblock_user", username, session.get('username', 'admin'))
 
 def get_all_users():
     us = load_users()
     r = []
     for u, d in us.items():
-        r.append({"username": u, "email": d.get("email", ""), "role": d.get("role", "user"), "created_at": d.get("created_at", ""), "last_login": d.get("last_login", "Jamais"), "total_scans": d.get("total_scans", 0), "blocked": d.get("blocked", False)})
+        r.append({
+            "username": u,
+            "email": d.get("email", ""),
+            "role": d.get("role", "user"),
+            "created_at": d.get("created_at", ""),
+            "last_login": d.get("last_login", "Jamais"),
+            "total_scans": d.get("total_scans", 0),
+            "blocked": d.get("blocked", False)
+        })
     return r
 
 def _log_action(action, detail, user=""):
-    le = {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "user": user, "action": action, "detail": detail, "ip": request.remote_addr if request else "system"}
-    with open(Config.LOG_DIR + "/audit.log", "a") as f:
+    le = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "user": user,
+        "action": action,
+        "detail": detail,
+        "ip": request.remote_addr if request else "system"
+    }
+    log_path = os.path.join(LOG_DIR, "audit.log")
+    with open(log_path, "a") as f:
         f.write(json.dumps(le) + "\n")
+
+# === ROUTES ===
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -213,6 +299,8 @@ def login():
         ok, msg = check_rate_limit()
         if not ok:
             return render_template("login.html", error=msg)
+        
+        # Admin check from config
         if u in Config.USERS and Config.USERS[u]["password"] == p:
             session['logged_in'] = True
             session['username'] = u
@@ -220,9 +308,9 @@ def login():
             session['last_active'] = time.time()
             login_attempts[get_client_ip()] = []
             _log_action("login", "Admin: " + u, u)
-            if u == "admin":
-                return redirect('/admin/dashboard')
-            return redirect('/dashboard')
+            return redirect('/admin/dashboard')
+        
+        # Regular user check
         r = authenticate_user(u, p)
         if r["success"]:
             session['logged_in'] = True
@@ -234,6 +322,7 @@ def login():
             if r.get("role") == "admin":
                 return redirect('/admin/dashboard')
             return redirect('/dashboard')
+        
         login_attempts[get_client_ip()].append(time.time())
         return render_template("login.html", error="Identifiants invalides")
     return render_template("login.html")
@@ -272,7 +361,11 @@ def forgot_password():
                 break
         if found:
             token = generate_reset_token()
-            reset_tokens[email] = {"token": token, "username": found, "expires": time.time() + 3600}
+            reset_tokens[email] = {
+                "token": token,
+                "username": found,
+                "expires": time.time() + 3600
+            }
             _log_action("password_reset_request", "Token pour " + found, found)
             return render_template("reset_sent.html", email=email)
         return render_template("forgot_password.html", error="Aucun compte trouve")
@@ -325,11 +418,11 @@ def user_dashboard():
     us = load_users()
     user_info = us.get(username, {})
     scans = []
-    if os.path.exists(Config.SCAN_DIR):
-        for f in sorted(os.listdir(Config.SCAN_DIR), reverse=True):
+    if os.path.exists(SCAN_DIR):
+        for f in sorted(os.listdir(SCAN_DIR), reverse=True):
             if f.endswith(".json"):
                 try:
-                    with open(Config.SCAN_DIR + "/" + f) as fh:
+                    with open(os.path.join(SCAN_DIR, f)) as fh:
                         d = json.load(fh)
                         if d.get("user") == username:
                             v = d.get("vulnerabilities", [])
@@ -337,9 +430,15 @@ def user_dashboard():
                             d["_high"] = sum(1 for x in v if x.get("severity") == "high")
                             d["_total_vulns"] = len(v)
                             scans.append(d)
-                except: pass
+                except:
+                    pass
     scans_left = max(0, Config.MAX_SCANS_PER_HOUR - len(scans))
-    return render_template("user_dashboard.html", username=username, user_info=user_info, scans=scans[:20], scans_left=scans_left, max_scans=Config.MAX_SCANS_PER_HOUR)
+    return render_template("user_dashboard.html",
+                         username=username,
+                         user_info=user_info,
+                         scans=scans[:20],
+                         scans_left=scans_left,
+                         max_scans=Config.MAX_SCANS_PER_HOUR)
 
 @app.route("/scan", methods=["GET", "POST"])
 @login_required
@@ -352,22 +451,27 @@ def new_scan():
         sid = secrets.token_hex(8)
         threading.Thread(target=run_scan_async, args=(sid, t, st, session['username']), daemon=True).start()
         return redirect("/scanning/" + sid)
+    
     user_scans = 0
-    if os.path.exists(Config.SCAN_DIR):
-        for f in os.listdir(Config.SCAN_DIR):
+    if os.path.exists(SCAN_DIR):
+        for f in os.listdir(SCAN_DIR):
             if f.endswith(".json"):
                 try:
-                    with open(Config.SCAN_DIR + "/" + f) as fh:
+                    with open(os.path.join(SCAN_DIR, f)) as fh:
                         d = json.load(fh)
                         if d.get("user") == session['username']:
                             user_scans += 1
-                except: pass
-    return render_template("scan.html", scans_left=max(0, Config.MAX_SCANS_PER_HOUR - user_scans), max_scans=Config.MAX_SCANS_PER_HOUR)
+                except:
+                    pass
+    return render_template("scan.html",
+                         scans_left=max(0, Config.MAX_SCANS_PER_HOUR - user_scans),
+                         max_scans=Config.MAX_SCANS_PER_HOUR)
 
 @app.route("/scanning/<scan_id>")
 @login_required
 def scanning_progress(scan_id):
-    if os.path.exists(Config.SCAN_DIR + "/" + scan_id + ".json"):
+    result_path = os.path.join(SCAN_DIR, scan_id + ".json")
+    if os.path.exists(result_path):
         return redirect("/results/" + scan_id)
     s = scan_status.get(scan_id, {"status": "unknown"})
     if s["status"] == "error":
@@ -377,49 +481,50 @@ def scanning_progress(scan_id):
 @app.route("/results/<scan_id>")
 @login_required
 def view_results(scan_id):
-    p = Config.SCAN_DIR + "/" + scan_id + ".json"
-    if not os.path.exists(p):
+    result_path = os.path.join(SCAN_DIR, scan_id + ".json")
+    if not os.path.exists(result_path):
         return "Scan introuvable", 404
-    with open(p) as f:
+    with open(result_path) as f:
         r = json.load(f)
     return render_template("results.html", results=r, scan_id=scan_id)
 
 @app.route("/exploit/<scan_id>")
 @login_required
 def exploit_scan(scan_id):
-    p = Config.SCAN_DIR + "/" + scan_id + ".json"
-    if not os.path.exists(p):
+    result_path = os.path.join(SCAN_DIR, scan_id + ".json")
+    if not os.path.exists(result_path):
         return "Scan introuvable", 404
-    with open(p) as f:
+    with open(result_path) as f:
         sr = json.load(f)
     eng = ExploitEngine(sr)
     er = eng.exploit_all()
     sr["exploitation"] = er
-    with open(p, "w") as f:
+    with open(result_path, "w") as f:
         json.dump(sr, f, indent=2)
     return redirect("/results/" + scan_id)
 
 @app.route("/report/<scan_id>")
 @login_required
 def generate_report(scan_id):
-    p = Config.SCAN_DIR + "/" + scan_id + ".json"
-    if not os.path.exists(p):
+    result_path = os.path.join(SCAN_DIR, scan_id + ".json")
+    if not os.path.exists(result_path):
         return "Scan introuvable", 404
-    with open(p) as f:
+    with open(result_path) as f:
         sr = json.load(f)
     rp = Reporter(sr, sr.get("exploitation", []))
-    rp.save_html("rapport_" + scan_id + ".html")
-    return send_file("rapports/rapport_" + scan_id + ".html", as_attachment=True, download_name="rapport_" + scan_id + ".html")
+    report_path = os.path.join(REPORT_DIR, "rapport_" + scan_id + ".html")
+    rp.save_html(report_path)
+    return send_file(report_path, as_attachment=True, download_name="rapport_" + scan_id + ".html")
 
 @app.route("/history")
 @login_required
 def history():
     scans = []
-    if os.path.exists(Config.SCAN_DIR):
-        for f in sorted(os.listdir(Config.SCAN_DIR), reverse=True):
+    if os.path.exists(SCAN_DIR):
+        for f in sorted(os.listdir(SCAN_DIR), reverse=True):
             if f.endswith(".json"):
                 try:
-                    with open(Config.SCAN_DIR + "/" + f) as fh:
+                    with open(os.path.join(SCAN_DIR, f)) as fh:
                         d = json.load(fh)
                         v = d.get("vulnerabilities", [])
                         d["_critical"] = sum(1 for x in v if x.get("severity") == "critical")
@@ -428,7 +533,8 @@ def history():
                         if session['role'] != 'admin' and d.get("user") != session['username']:
                             continue
                         scans.append(d)
-                except: pass
+                except:
+                    pass
     return render_template("history.html", scans=scans[:100])
 
 @app.route("/profile", methods=["GET", "POST"])
@@ -449,7 +555,8 @@ def profile():
 @app.route("/api/scan-status/<scan_id>")
 @login_required
 def api_scan_status(scan_id):
-    if os.path.exists(Config.SCAN_DIR + "/" + scan_id + ".json"):
+    result_path = os.path.join(SCAN_DIR, scan_id + ".json")
+    if os.path.exists(result_path):
         return jsonify({"status": "done"})
     return jsonify(scan_status.get(scan_id, {"status": "unknown"}))
 
@@ -470,39 +577,71 @@ def server_error(e):
 def health():
     return jsonify({"status": "ok", "time": datetime.now().isoformat()})
 
+# === ROUTES ADMIN ===
+
 @app.route("/admin/dashboard")
 @admin_required
 def admin_dashboard():
-    users = get_all_users()
-    blocked_ips = load_blocked_ips()
-    total_scans = sum(u.get("total_scans", 0) for u in users) if users else 0
-    blocked_users = sum(1 for u in users if u.get("blocked")) if users else 0
-    active_users = sum(1 for u in users if u.get("last_login") and u.get("last_login") != "Jamais") if users else 0
-    
-    # Logs
-    logs = []
-    lp = Config.LOG_DIR + "/audit.log"
-    if os.path.exists(lp) and os.path.getsize(lp) > 0:
-        try:
-            with open(lp) as f:
-                for l in f:
-                    l = l.strip()
-                    if l:
-                        try: logs.append(json.loads(l))
-                        except: pass
-        except: pass
-    
-    # Forcer le rechargement des fichiers
-    _log_action("admin_view", "Dashboard consulte", session.get('username', 'admin'))
-    
-    return render_template("admin_dashboard.html", 
-        total_users=len(users) if users else 0, 
-        total_scans=total_scans, 
-        blocked_users=blocked_users, 
-        active_users=active_users, 
-        users=users if users else [],
-        blocked_ips=blocked_ips if blocked_ips else {},
-        logs=logs[-30:][::-1] if logs else [])
+    try:
+        # Forcer le rechargement depuis le fichier (chemin ABSOLU)
+        users = get_all_users()
+        blocked_ips = load_blocked_ips()
+        
+        stats_users = len(users) if users else 0
+        stats_scans = sum(u.get("total_scans", 0) for u in users) if users else 0
+        stats_blocked = sum(1 for u in users if u.get("blocked")) if users else 0
+        stats_active = sum(1 for u in users if u.get("last_login") and u.get("last_login") != "Jamais") if users else 0
+        
+        # Charger les logs
+        logs = []
+        log_path = os.path.join(LOG_DIR, "audit.log")
+        if os.path.exists(log_path) and os.path.getsize(log_path) > 0:
+            try:
+                with open(log_path) as f:
+                    for l in f:
+                        l = l.strip()
+                        if l:
+                            try:
+                                logs.append(json.loads(l))
+                            except:
+                                pass
+            except:
+                pass
+        
+        # Charger les scans récents
+        recent_scans = []
+        if os.path.exists(SCAN_DIR):
+            for f in sorted(os.listdir(SCAN_DIR), reverse=True)[:10]:
+                if f.endswith(".json"):
+                    try:
+                        with open(os.path.join(SCAN_DIR, f)) as fh:
+                            d = json.load(fh)
+                            v = d.get("vulnerabilities", [])
+                            d["_critical"] = sum(1 for x in v if x.get("severity") == "critical")
+                            d["_high"] = sum(1 for x in v if x.get("severity") == "high")
+                            d["_total_vulns"] = len(v)
+                            recent_scans.append(d)
+                    except:
+                        pass
+        
+        _log_action("admin_view", "Dashboard consulte", session.get('username', 'admin'))
+        
+        return render_template("admin_dashboard.html",
+            total_users=stats_users,
+            total_scans=stats_scans,
+            blocked_users=stats_blocked,
+            active_users=stats_active,
+            users=users if users else [],
+            scans=recent_scans,
+            blocked_ips=blocked_ips if blocked_ips else {},
+            logs=logs[-30:][::-1] if logs else [])
+    except Exception as e:
+        print(f"[ERROR] admin_dashboard: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template("admin_dashboard.html",
+            total_users=0, total_scans=0, blocked_users=0, active_users=0,
+            users=[], scans=[], blocked_ips={}, logs=[])
 
 @app.route("/admin/users")
 @admin_required
@@ -529,24 +668,26 @@ def admin_delete_user(username):
     if username in us and us[username].get("role") != "admin":
         del us[username]
         save_users(us)
+        _log_action("delete_user", "Utilisateur supprime: " + username, session.get('username', 'admin'))
     return redirect('/admin/users')
 
 @app.route("/admin/scans")
 @admin_required
 def admin_scans():
     scans = []
-    if os.path.exists(Config.SCAN_DIR):
-        for f in sorted(os.listdir(Config.SCAN_DIR), reverse=True):
+    if os.path.exists(SCAN_DIR):
+        for f in sorted(os.listdir(SCAN_DIR), reverse=True):
             if f.endswith(".json"):
                 try:
-                    with open(Config.SCAN_DIR + "/" + f) as fh:
+                    with open(os.path.join(SCAN_DIR, f)) as fh:
                         d = json.load(fh)
                         v = d.get("vulnerabilities", [])
                         d["_critical"] = sum(1 for x in v if x.get("severity") == "critical")
                         d["_high"] = sum(1 for x in v if x.get("severity") == "high")
                         d["_total_vulns"] = len(v)
                         scans.append(d)
-                except: pass
+                except:
+                    pass
     return render_template("admin_scans.html", scans=scans[:100])
 
 @app.route("/admin/ips")
@@ -571,7 +712,13 @@ def admin_block_ip_manual():
     permanent = request.form.get("permanent", "off") == "on"
     if ip:
         blocked = load_blocked_ips()
-        blocked[ip] = {"ip": ip, "blocked_at": time.time(), "reason": reason, "permanent": permanent, "blocked_by": session.get('username')}
+        blocked[ip] = {
+            "ip": ip,
+            "blocked_at": time.time(),
+            "reason": reason,
+            "permanent": permanent,
+            "blocked_by": session.get('username')
+        }
         save_blocked_ips(blocked)
     return redirect("/admin/ips")
 
@@ -579,9 +726,9 @@ def admin_block_ip_manual():
 @admin_required
 def admin_alertes():
     logs = []
-    lp = Config.LOG_DIR + "/audit.log"
-    if os.path.exists(lp):
-        with open(lp) as f:
+    log_path = os.path.join(LOG_DIR, "audit.log")
+    if os.path.exists(log_path):
+        with open(log_path) as f:
             for l in f:
                 l = l.strip()
                 if l:
@@ -590,29 +737,52 @@ def admin_alertes():
                         action = log.get("action", "")
                         if any(k in action for k in ["blocked", "intrusion", "attack", "suspicious", "failed", "error", "scan"]):
                             logs.append(log)
-                    except: pass
+                    except:
+                        pass
     return render_template("admin_alertes.html", alertes=logs[-100:], blocked_count=len(load_blocked_ips()))
 
 @app.route("/admin/logs")
 @admin_required
 def admin_logs():
     logs = []
-    lp = Config.LOG_DIR + "/audit.log"
-    if os.path.exists(lp):
-        with open(lp) as f:
+    log_path = os.path.join(LOG_DIR, "audit.log")
+    if os.path.exists(log_path):
+        with open(log_path) as f:
             for l in f:
                 l = l.strip()
                 if l:
-                    try: logs.append(json.loads(l))
-                    except: pass
+                    try:
+                        logs.append(json.loads(l))
+                    except:
+                        pass
     return render_template("admin_logs.html", logs=logs[-200:][::-1])
 
+# === DEMARRAGE ===
 if __name__ == "__main__":
+    # Créer l'admin par défaut si nécessaire
+    us = load_users()
+    if "admin" not in us:
+        us["admin"] = {
+            "password": "Hacker_Pro_2005",
+            "email": "hountondjielvis07@gmail.com",
+            "role": "admin",
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "last_login": None,
+            "total_scans": 0,
+            "blocked": False
+        }
+        save_users(us)
+        print("[✓] Compte admin cree dans users.json")
+    
     print("=" * 60)
     print("  NOXSCAN SECURITY PLATFORM")
     print("=" * 60)
-    print("  Admin: admin / NoxScan_Admin_2026!")
-    print("  Port :", Config.PORT)
-    print("  Scanner:", "OK" if web_scanner_ok else "NON DISPONIBLE")
+    print(f"  Admin: admin / Hacker_Pro_2005")
+    print(f"  Email: hountondjielvis07@gmail.com")
+    print(f"  Port : {Config.PORT}")
+    print(f"  Scanner: {'OK' if web_scanner_ok else 'NON DISPONIBLE'}")
+    print(f"  Base: {BASE_DIR}")
+    print(f"  Users DB: {USERS_DB}")
+    print(f"  Scan dir: {SCAN_DIR}")
     print("=" * 60)
     app.run(host=Config.HOST, port=Config.PORT, debug=False)
