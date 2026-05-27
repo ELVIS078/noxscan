@@ -36,14 +36,40 @@
             transition: all 0.2s;
         }
         .input-group input:focus { outline: none; border-color: #00c853; box-shadow: 0 0 0 3px rgba(0,200,83,0.15); }
-        button {
+        /* Zone du mot de passe avec bouton œil */
+        .password-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .password-wrapper input {
+            flex: 1;
+            padding-right: 48px;
+        }
+        .toggle-pwd {
+            position: absolute;
+            right: 12px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 20px;
+            color: #888;
+            padding: 4px;
+            line-height: 1;
+            transition: color 0.2s;
+            width: auto;
+            margin: 0;
+        }
+        .toggle-pwd:hover { color: #00c853; transform: none; }
+        button[type="submit"] {
             width: 100%; padding: 14px; background: #00c853;
             border: none; border-radius: 8px; color: #000;
             font-size: 16px; font-weight: 700; cursor: pointer;
             margin-top: 8px; transition: all 0.2s;
         }
-        button:hover { background: #00e676; transform: translateY(-1px); }
+        button[type="submit"]:hover { background: #00e676; transform: translateY(-1px); }
         .error { background: #2a1a1a; color: #ff1744; padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; text-align: center; border: 1px solid #3a1a1a; }
+        .success { background: #1a2a1a; color: #00c853; padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; text-align: center; border: 1px solid #1a3a1a; }
         .security { text-align: center; margin-top: 24px; font-size: 11px; color: #444; }
         .security span { color: #00c853; }
     </style>
@@ -54,10 +80,18 @@
             <h1>🔒 NoxScan</h1>
             <p>Plateforme d'audit de sécurité professionnelle</p>
         </div>
-        <div style="text-align:center;margin-top:16px;font-size:13px;"><a href="/register" style="color:#2979ff;text-decoration:none;">Créer un compte</a> · <a href="/forgot" style="color:#666;text-decoration:none;">Mot de passe oublié</a></div>
+        <div style="text-align:center;margin-top:16px;font-size:13px;">
+            <a href="/register" style="color:#2979ff;text-decoration:none;">Créer un compte</a> · 
+            <a href="/forgot-password" style="color:#666;text-decoration:none;">Mot de passe oublié</a>
+        </div>
+        
         {% if error %}
         <div class="error">{{ error }}</div>
         {% endif %}
+        {% if success %}
+        <div class="success">{{ success }}</div>
+        {% endif %}
+        
         <form method="POST">
             <div class="input-group">
                 <label>Identifiant</label>
@@ -65,14 +99,33 @@
             </div>
             <div class="input-group">
                 <label>Mot de passe</label>
-                <input type="password" name="password" placeholder="Mot de passe" required>
+                <div class="password-wrapper">
+                    <input type="password" id="password" name="password" placeholder="Mot de passe" required>
+                    <button type="button" class="toggle-pwd" id="toggleBtn" onclick="togglePassword()" title="Afficher/masquer le mot de passe">👁️</button>
+                </div>
             </div>
             <button type="submit">Se connecter</button>
-        <div style="text-align:center;margin-top:12px"><a href="/forgot-password" style="color:#8888aa;font-size:13px;text-decoration:none">Mot de passe oublié ?</a></div>
-</form>
+            <div style="text-align:center;margin-top:12px">
+                <a href="/forgot-password" style="color:#8888aa;font-size:13px;text-decoration:none;">Mot de passe oublié ?</a>
+            </div>
+        </form>
         <div class="security">
             <span>🔐</span> Connexion sécurisée — HTTPS activé
         </div>
     </div>
+
+    <script>
+        function togglePassword() {
+            var pwd = document.getElementById('password');
+            var btn = document.getElementById('toggleBtn');
+            if (pwd.type === 'password') {
+                pwd.type = 'text';
+                btn.textContent = '🙈';
+            } else {
+                pwd.type = 'password';
+                btn.textContent = '👁️';
+            }
+        }
+    </script>
 </body>
 </html>
