@@ -650,8 +650,8 @@ def admin_scans():
 @admin_required
 def admin_ips():
     return render_template("admin_ips.html", 
-        blocked_ips=blocked_ips_db if blocked_ips_db else {},
-        pending_unblocks=[{"ip": ip, "username": info.get("username", "?"), "requested_at": datetime.fromtimestamp(info.get("requested_at", 0)).strftime("%Y-%m-%d %H:%M:%S")} for ip, info in pending_unblocks.items()])
+        block_ips=blocked_ips_db if blocked_ips_db else {},
+        unblock_requests=[{"ip": ip, "username": info.get("username", "?"), "requested_at": datetime.fromtimestamp(info.get("requested_at", 0)).strftime("%Y-%m-%d %H:%M:%S")} for ip, info in pending_unblocks.items()])
 
 @app.route("/admin/unblock-ip/<ip>")
 @admin_required
