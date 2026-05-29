@@ -342,7 +342,6 @@ def home():
             return redirect('/admin/dashboard')
         return redirect('/dashboard')
     return redirect('/login')
-
 @app.route("/dashboard")
 @login_required
 def user_dashboard():
@@ -363,7 +362,11 @@ def user_dashboard():
                             d["_total_vulns"] = len(v)
                             scans.append(d)
                 except: pass
-    return render_template("user_dashboard.html", username=username, user_info=user_info, scans=scans[:20])
+    today = datetime.now().strftime("%Y-%m-%d")
+    scans_today = sum(1 for s in scans if s.get("timestamp","").startswith(today))
+    scans_left = max(0, 10 - scans_today)
+    return render_template("user_dashboard.html", username=username, user_info=user_info, scans=scans[:20], scans_left=scans_left)à
+
 
 @app.route("/scan", methods=["GET", "POST"])
 @login_required
