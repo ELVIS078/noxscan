@@ -1,104 +1,93 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IP bloquées - Admin - NoxScan</title>
-    <style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:'Segoe UI',Arial,sans-serif;background:#0a0a1a;color:#e0e0e0;display:flex;min-height:100vh}
-        .sidebar{width:240px;background:#0d0d22;padding:20px;border-right:1px solid #1a1a3e}
-        .sidebar h2{color:#00ff88;font-size:18px;margin-bottom:20px}
-        .sidebar a{display:block;color:#8888aa;padding:10px;border-radius:8px;text-decoration:none;margin-bottom:4px}
-        .sidebar a:hover,.sidebar a.active{background:#1a1a3e;color:#00ff88}
-        .main{flex:1;padding:30px}
-        h1{color:#fff;font-size:24px;margin-bottom:24px}
-        table{width:100%;border-collapse:collapse}
-        th,td{padding:12px;text-align:left;border-bottom:1px solid #1a1a3e}
-        th{color:#00ff88;font-size:13px;text-transform:uppercase}
-        td{color:#c0c0e0;font-size:14px}
-        .badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold}
-        .badge-red{background:#3a0a0a;color:#ff4444}
-        .badge-green{background:#0a3a0a;color:#00ff88}
-        .badge-yellow{background:#3a3a0a;color:#ffcc00}
-        .btn{display:inline-block;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;margin:2px}
-        .btn-green{background:#00ff88;color:#0a0a1a}
-        .btn-red{background:#ff4444;color:#fff}
-        .btn-blue{background:#2979ff;color:#fff}
-        .card{background:#12122a;border:1px solid #2a2a5a;border-radius:12px;padding:20px;margin-bottom:20px}
-        .card h3{color:#00ff88;margin-bottom:12px}
-        .card h4{color:#ffcc00;margin-bottom:10px}
-        input[type=text]{padding:10px;background:#1a1a3e;border:1px solid #2a2a5a;border-radius:6px;color:#e0e0e0;margin-right:6px;width:200px}
-        select{padding:10px;background:#1a1a3e;border:1px solid #2a2a5a;border-radius:6px;color:#e0e0e0;margin-right:6px}
-        button{padding:10px 16px;background:#00ff88;color:#0a0a1a;border:none;border-radius:6px;cursor:pointer;font-weight:bold}
-        .msg{color:#aaa;font-size:14px;padding:8px 0}
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>IP bloquées - Admin - NoxScan</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#0a0a1a;color:#e0e0e0;display:flex;min-height:100vh}
+.sidebar{width:240px;background:#0d0d22;padding:20px;border-right:1px solid #1a1a3e}
+.sidebar h2{color:#00ff88;font-size:18px;margin-bottom:20px}
+.sidebar a{display:block;color:#8888aa;padding:10px;border-radius:8px;text-decoration:none;margin-bottom:4px}
+.sidebar a:hover,.sidebar a.active{background:#1a1a3e;color:#00ff88}
+.main{flex:1;padding:30px}
+h1{color:#fff;font-size:24px;margin-bottom:24px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:12px;text-align:left;border-bottom:1px solid #1a1a3e}
+th{color:#00ff88;font-size:13px;text-transform:uppercase}
+td{color:#c0c0e0;font-size:14px}
+.badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold}
+.badge-red{background:#3a0a0a;color:#ff4444}
+.badge-green{background:#0a3a0a;color:#00ff88}
+.badge-yellow{background:#3a3a0a;color:#ffcc00}
+.btn{display:inline-block;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;margin:2px}
+.btn-green{background:#00ff88;color:#0a0a1a}
+.btn-red{background:#ff4444;color:#fff}
+.btn-blue{background:#4488ff;color:#fff}
+.card{background:#12122a;border:1px solid #2a2a5a;border-radius:12px;padding:20px;margin-bottom:20px}
+.card h3{color:#00ff88;margin-bottom:12px}
+input[type=text]{padding:10px;background:#1a1a3e;border:1px solid #2a2a5a;border-radius:6px;color:#e0e0e0;margin-right:6px;width:200px}
+select{padding:10px;background:#1a1a3e;border:1px solid #2a2a5a;border-radius:6px;color:#e0e0e0;margin-right:6px}
+button{padding:10px 16px;background:#00ff88;color:#0a0a1a;border:none;border-radius:6px;cursor:pointer;font-weight:bold}
+</style>
 </head>
 <body>
 <div class="sidebar">
-    <h2>🔒 NoxScan Admin</h2>
-    <a href="/admin">Dashboard</a>
-    <a href="/admin/ips" class="active">IPs bloquées</a>
-    <a href="/admin/alertes">Alertes</a>
-    <a href="/">← Retour</a>
+<h2>🔒 NoxScan Admin</h2>
+<a href="/admin/dashboard">Dashboard</a>
+<a href="/admin/users">Utilisateurs</a>
+<a href="/admin/scans">Scans</a>
+<a href="/admin/ips" class="active">IP bloquées</a>
+<a href="/admin/alertes">Alertes</a>
+<a href="/admin/logs">Logs</a>
+<a href="/dashboard">← Interface utilisateur</a>
+<a href="/logout">Deconnexion</a>
 </div>
 <div class="main">
-    <h1>🌐 IPs bloquées</h1>
+<h1>🌐 IP bloquées</h1>
 
-    <!-- Demandes de déblocage en attente -->
-    <div class="card">
-        <h4>📩 Demandes de déblocage en attente</h4>
-        {% if unblock_requests %}
-        <table>
-            <tr>
-                <th>IP</th>
-                <th>Utilisateur</th>
-                <th>Date</th>
-                <th>Actions</th>
-            </tr>
-            {% for req in unblock_requests %}
-            <tr>
-                <td>{{ req.ip }}</td>
-                <td>{{ req.username }}</td>
-                <td>{{ req.requested_at }}</td>
-                <td>
-                    <a href="/admin/unblock-ip/{{ req.ip }}" class="btn btn-green">✅ Débloquer</a>
-                    <a href="/admin/deny-unblock/{{ req.ip }}" class="btn btn-red">❌ Refuser</a>
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
-        {% else %}
-        <p class="msg">Aucune demande de déblocage en attente.</p>
-        {% endif %}
-    </div>
+{% if pending_unblocks and pending_unblocks|length > 0 %}
+<div class="card" style="border-color:#ffcc00;">
+<h3>⏳ Demandes de déblocage en attente</h3>
+<table>
+<tr><th>IP</th><th>Utilisateur</th><th>Date demande</th><th>Action</th></tr>
+{% for item in pending_unblocks %}
+<tr>
+<td>{{ item.ip }}</td>
+<td>{{ item.username }}</td>
+<td>{{ item.requested_at }}</td>
+<td><a href="/admin/unblock-ip/{{ item.ip }}" class="btn btn-green">✓ Débloquer</a></td>
+</tr>
+{% endfor %}
+</table>
+</div>
+{% endif %}
 
-    <!-- Bloquer une IP manuellement -->
-    <div class="card">
-        <h3>➕ Bloquer une IP manuellement</h3>
-        <form method="POST" action="/admin/block-ip">
-            <input type="text" name="ip" placeholder="192.168.1.1" required>
-            <input type="text" name="reason" placeholder="Raison du blocage">
-            <label style="color:#8888aa;font-size:13px"><input type="checkbox" name="permanent"> Permanent</label>
-            <button type="submit">Bloquer</button>
-        </form>
-    </div>
+<div class="card">
+<h3>➕ Bloquer une IP manuellement</h3>
+<form method="POST" action="/admin/block-ip">
+<input type="text" name="ip" placeholder="192.168.1.1" required>
+<input type="text" name="reason" placeholder="Raison du blocage">
+<label style="color:#8888aa;font-size:13px"><input type="checkbox" name="permanent"> Permanent</label>
+<button type="submit">Bloquer</button>
+</form>
+</div>
 
-    <!-- Liste des IPs bloquées -->
-    <table>
-        <tr><th>IP</th><th>Date</th><th>Raison</th><th>Permanent</th><th>Actions</th></tr>
-        {% for ip, info in block_ips.items() %}
-        <tr>
-            <td>{{ ip }}</td>
-            <td>{{ info.get('blocked_at','?') }}</td>
-            <td>{{ info.get('reason','?') }}</td>
-            <td>{% if info.get('permanent') %}<span class="badge badge-red">Oui</span>{% else %}<span class="badge badge-green">Non</span>{% endif %}</td>
-            <td><a href="/admin/unblock-ip/{{ip}}" class="btn btn-green">Débloquer</a></td>
-        </tr>
-        {% else %}
-        <tr><td colspan="5" style="text-align:center;color:#8888aa">Aucune IP bloquée</td></tr>
-        {% endfor %}
-    </table>
+<table>
+<tr><th>IP</th><th>Date</th><th>Raison</th><th>Permanent</th><th>Actions</th></tr>
+{% for ip, info in blocked_ips.items() %}
+<tr>
+<td>{{ ip }}</td>
+<td>{{ info.get('blocked_at','?') }}</td>
+<td>{{ info.get('reason','?') }}</td>
+<td>{% if info.get('permanent') %}<span class="badge badge-red">Oui</span>{% else %}<span class="badge badge-green">Non</span>{% endif %}</td>
+<td><a href="/admin/unblock-ip/{{ ip }}" class="btn btn-green">Debloquer</a></td>
+</tr>
+{% else %}
+<tr><td colspan="5" style="text-align:center;color:#8888aa">Aucune IP bloquee</td></tr>
+{% endfor %}
+</table>
 </div>
 </body>
 </html>

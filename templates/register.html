@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NoxScan — Inscription</title>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -9,23 +10,18 @@
         .card { background: #14171e; padding: 40px; border-radius: 12px; border: 1px solid #1e2128; width: 420px; max-width: 95%; }
         h1 { color: #00c853; text-align: center; margin-bottom: 4px; }
         p.sub { color: #666; text-align: center; margin-bottom: 24px; font-size: 13px; }
-        input { width: 100%; padding: 12px 14px; margin-bottom: 12px; background: #0a0c10; border: 1px solid #1e2128; border-radius: 6px; color: #e0e0e0; font-size: 14px; box-sizing:border-box; }
+        input { width: 100%; padding: 12px 14px; margin-bottom: 12px; background: #0a0c10; border: 1px solid #1e2128; border-radius: 6px; color: #e0e0e0; font-size: 14px; }
         input:focus { outline: none; border-color: #00c853; }
-        .password-wrapper { position: relative; display: flex; align-items: center; margin-bottom: 12px; }
-        .password-wrapper input { margin-bottom: 0; padding-right: 44px; }
-        .toggle-pwd {
-            position: absolute; right: 10px; background: none; border: none;
-            cursor: pointer; font-size: 20px; color: #888; padding: 4px; line-height: 1;
-            width: auto; margin: 0;
-        }
+        .password-wrapper { position: relative; display: flex; align-items: center; }
+        .password-wrapper input { flex: 1; padding-right: 48px; }
+        .toggle-pwd { position: absolute; right: 12px; background: none; border: none; cursor: pointer; font-size: 18px; color: #888; padding: 4px; line-height: 1; width:auto; margin:0; }
         .toggle-pwd:hover { color: #00c853; }
-        button { width: 100%; padding: 12px; background: #00c853; border: none; border-radius: 6px; color: #000; font-size: 15px; font-weight: 700; cursor: pointer; margin-top:4px; }
+        button { width: 100%; padding: 12px; background: #00c853; border: none; border-radius: 6px; color: #000; font-size: 15px; font-weight: 700; cursor: pointer; }
         button:hover { background: #00e676; }
         .error { color: #ff1744; text-align: center; margin-bottom: 12px; font-size: 13px; background: #2a1a1a; padding: 8px; border-radius: 4px; }
         .success { color: #00c853; text-align: center; margin-bottom: 12px; font-size: 13px; background: #0a1a0a; padding: 8px; border-radius: 4px; }
         .link { text-align: center; margin-top: 16px; font-size: 13px; }
         .link a { color: #2979ff; text-decoration: none; }
-        .link a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -37,16 +33,14 @@
         <form method="POST">
             <input type="text" name="username" placeholder="Nom d'utilisateur" required autofocus>
             <input type="email" name="email" placeholder="Adresse email" required>
-            
             <div class="password-wrapper">
-                <input type="password" id="pwd1" name="password" placeholder="Mot de passe (min 6 car.)" required>
+                <input type="password" id="pwd1" name="password" placeholder="Mot de passe (min 6 caractères)" required>
                 <button type="button" class="toggle-pwd" onclick="togglePwd('pwd1', this)" title="Afficher/masquer">👁️</button>
             </div>
             <div class="password-wrapper">
                 <input type="password" id="pwd2" name="confirm_password" placeholder="Confirmer le mot de passe" required>
                 <button type="button" class="toggle-pwd" onclick="togglePwd('pwd2', this)" title="Afficher/masquer">👁️</button>
             </div>
-            
             <button type="submit">S'inscrire</button>
         </form>
         <div class="link">
@@ -55,9 +49,9 @@
     </div>
     <script>
         function togglePwd(id, btn) {
-            var f = document.getElementById(id);
-            f.type = f.type === 'password' ? 'text' : 'password';
-            btn.textContent = f.type === 'password' ? '👁️' : '🙈';
+            var p = document.getElementById(id);
+            if (p.type === 'password') { p.type = 'text'; btn.textContent = '🙈'; }
+            else { p.type = 'password'; btn.textContent = '👁️'; }
         }
     </script>
 </body>

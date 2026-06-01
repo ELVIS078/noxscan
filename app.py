@@ -1,5 +1,6 @@
+cat > app.py << 'APPEOF'
 #!/usr/bin/env python3
-"""NoxScan Security Platform — VERSION STABLE + TOUS CORRECTIFS"""
+"""NoxScan Security Platform — VERSION STABLE FINALE"""
 from flask import Flask, request, render_template, redirect, jsonify, session, send_file
 import json, os, secrets, time, threading
 from datetime import datetime
@@ -40,54 +41,62 @@ except:
 app = Flask(__name__)
 app.secret_key = Config.SECRET_KEY
 
-# === STOCKAGE EN MÉMOIRE ===
-users_db = {}
-blocked_ips_db = {}
+# === STOCKAGE FICHIERS (pas de mémoire globale risquée) ===
 login_attempts = defaultdict(list)
 scan_status = {}
 reset_tokens = {}
-pending_unblocks = {}  # {ip: {username, reason, requested_at}}
+pending_unblocks = {}
 
-def sauvegarder():
-    try:
-        with open(os.path.join(BASE_DIR, "users.json"), "w", encoding='utf-8') as f:
-            json.dump(users_db, f, indent=2, ensure_ascii=False)
-        with open(os.path.join(BASE_DIR, "blocked_ips.json"), "w") as f:
-            json.dump(blocked_ips_db, f, indent=2)
-    except Exception as e:
-        print(f"[!] Erreur sauvegarde: {e}")
+def get_users_path():
+    return os.path.join(BASE_DIR, "users.json")
 
-def charger():
-    global users_db, blocked_ips_db
-    try:
-        p = os.path.join(BASE_DIR, "users.json")
-        if os.path.exists(p) and os.path.getsize(p) > 0:
+def get_blocked_ips_path():
+    return os.path.join(BASE_DIR, "blocked_ips.json")
+
+def load_users():
+    p = get_users_path()
+    if os.path.exists(p) and os.path.getsize(p) > 0:
+        try:
             with open(p, "r", encoding='utf-8') as f:
-                users_db = json.load(f)
-        if "admin" not in users_db:
-            users_db["admin"] = {
-                "password": "Hacker_Pro_2005",
-                "email": "hountondjielvis07@gmail.com",
-                "role": "admin",
-                "created_at": "2025-01-01",
-                "last_login": "Jamais",
-                "total_scans": 0,
-                "blocked": False,
-                "ip": "all"
-            }
-            sauvegarder()
-    except:
-        users_db = {"admin": {"password": "Hacker_Pro_2005", "email": "hountondjielvis07@gmail.com", "role": "admin", "created_at": "2025-01-01", "last_login": "Jamais", "total_scans": 0, "blocked": False, "ip": "all"}}
-    
-    try:
-        p = os.path.join(BASE_DIR, "blocked_ips.json")
-        if os.path.exists(p) and os.path.getsize(p) > 0:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+        except:
+            pass
+    # Creer admin par defaut
+    default = {
+        "admin": {
+            "password": "Hacker_Pro_2005",
+            "email": "hountondjielvis07@gmail.com",
+            "role": "admin",
+            "created_at": "2025-01-01",
+            "last_login": "Jamais",
+            "total_scans": 0,
+            "blocked": False
+        }
+    }
+    save_users(default)
+    return default
+
+def save_users(users):
+    with open(get_users_path(), "w", encoding='utf-8') as f:
+        json.dump(users, f, indent=2, ensure_ascii=False)
+
+def load_blocked_ips():
+    p = get_blocked_ips_path()
+    if os.path.exists(p) and os.path.getsize(p) > 0:
+        try:
             with open(p, "r") as f:
-                blocked_ips_db = json.load(f)
-        else:
-            blocked_ips_db = {}
-    except:
-        blocked_ips_db = {}
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+        except:
+            pass
+    return {}
+
+def save_blocked_ips(blocked):
+    with open(get_blocked_ips_path(), "w") as f:
+        json.dump(blocked, f, indent=2)
 
 def get_client_ip():
     if request.headers.get("X-Forwarded-For"):
@@ -95,28 +104,32 @@ def get_client_ip():
     return request.remote_addr or "127.0.0.1"
 
 def is_ip_blocked(ip):
-    if ip in blocked_ips_db:
-        info = blocked_ips_db[ip]
-        if info.get("permanent"): return True
-        if time.time() - info.get("blocked_at", 0) < 86400: return True
+    blocked = load_blocked_ips()
+    if ip in blocked:
+        info = blocked[ip]
+        if info.get("permanent"):
+            return True
+        if time.time() - info.get("blocked_at", 0) < 86400:
+            return True
         else:
-            del blocked_ips_db[ip]
-            sauvegarder()
+            del blocked[ip]
+            save_blocked_ips(blocked)
     return False
 
 def check_rate_limit():
     ip = get_client_ip()
-    # Ne pas bloquer les admins
     if session.get('role') == 'admin':
         return True, ""
-    if is_ip_blocked(ip): return False, "IP bloquee"
+    if is_ip_blocked(ip):
+        return False, "Votre IP est bloquee pour 24h"
     now = time.time()
     login_attempts[ip] = [t for t in login_attempts[ip] if now - t < 300]
     if len(login_attempts[ip]) >= Config.FAILED_LOGIN_LIMIT:
-        blocked_ips_db[ip] = {"ip": ip, "blocked_at": now, "reason": "Trop de tentatives", "attempts": len(login_attempts[ip]), "permanent": False}
-        sauvegarder()
+        blocked = load_blocked_ips()
+        blocked[ip] = {"ip": ip, "blocked_at": now, "reason": "Trop de tentatives echouees", "attempts": len(login_attempts[ip]), "permanent": False}
+        save_blocked_ips(blocked)
         _log("ip_blocked", f"IP {ip} bloquee", "system")
-        return False, "Votre IP a ete bloquee pour 24h apres 5 tentatives echouees"
+        return False, "IP bloquee pour 24h (5 tentatives echouees)"
     return True, ""
 
 def _log(action, detail, user=""):
@@ -127,15 +140,12 @@ def _log(action, detail, user=""):
     except:
         pass
 
-# === ROUTES ===
-
 @app.before_request
 def anti_intrusion():
     if request.path.startswith("/static") or request.path.startswith("/health") or request.path == "/debug-users" or request.path == "/unblock-me" or request.path.startswith("/unblock-request"):
         return
     ip = get_client_ip()
     if is_ip_blocked(ip):
-        # Si l'utilisateur est connecté et est admin, ne pas bloquer
         if session.get('role') == 'admin':
             return
         return render_template("blocked.html", ip=ip), 403
@@ -175,34 +185,30 @@ def login():
     if request.method == "POST":
         u = request.form.get("username", "").strip()
         p = request.form.get("password", "")
-        
         ok, msg = check_rate_limit()
         if not ok:
             return render_template("login.html", error=msg)
-        
-        # Admin via config.py
-        if u in Config.USERS and Config.USERS[u]["password"] == p:
-            session['logged_in'] = True
-            session['username'] = u
-            session['role'] = Config.USERS[u]["role"]
-            session['last_active'] = time.time()
-            login_attempts[get_client_ip()] = []
-            _log("login", f"Admin: {u}", u)
-            return redirect('/admin/dashboard')
-        
         try:
-            charger()
-            if u in users_db:
-                user = users_db[u]
+            if u in Config.USERS and Config.USERS[u]["password"] == p:
+                session['logged_in'] = True
+                session['username'] = u
+                session['role'] = Config.USERS[u]["role"]
+                session['last_active'] = time.time()
+                login_attempts[get_client_ip()] = []
+                _log("login", f"Admin: {u}", u)
+                return redirect('/admin/dashboard')
+            users = load_users()
+            if u in users:
+                user = users[u]
                 if user.get("blocked"):
-                    return render_template("login.html", error="Votre compte a ete bloque par l'administrateur")
+                    return render_template("login.html", error="Compte bloque par l'administrateur")
                 if user["password"] == p:
                     session['logged_in'] = True
                     session['username'] = u
                     session['role'] = user.get("role", "user")
                     session['last_active'] = time.time()
                     user["last_login"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    sauvegarder()
+                    save_users(users)
                     login_attempts[get_client_ip()] = []
                     _log("login", f"User: {u}", u)
                     if user.get("role") == "admin":
@@ -211,7 +217,6 @@ def login():
         except Exception as e:
             print(f"[!] Login error: {e}")
             return render_template("login.html", error="Erreur interne, reessayez")
-        
         login_attempts[get_client_ip()].append(time.time())
         return render_template("login.html", error="Identifiants invalides")
     return render_template("login.html")
@@ -234,49 +239,34 @@ def register():
             return render_template("register.html", error="Mots de passe differents")
         if len(p) < 6:
             return render_template("register.html", error="Mot de passe trop court (min 6 caracteres)")
-        
         try:
-            charger()
-            if u in users_db:
+            users = load_users()
+            if u in users:
                 return render_template("register.html", error="Ce nom d'utilisateur existe deja")
-            users_db[u] = {
-                "password": p, "email": e, "role": "user",
-                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "last_login": None, "total_scans": 0, "blocked": False
-            }
-            sauvegarder()
+            users[u] = {"password": p, "email": e, "role": "user", "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "last_login": None, "total_scans": 0, "blocked": False}
+            save_users(users)
             _log("register", f"Nouvel utilisateur: {u}", u)
             return render_template("login.html", success="Compte cree avec succes ! Connectez-vous.")
         except Exception as ex:
             return render_template("register.html", error=f"Erreur: {str(ex)}")
     return render_template("register.html")
 
-# === MOT DE PASSE OUBLIÉ (version simplifiée, fonctionnelle sans email) ===
 @app.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
     if request.method == "POST":
         identifiant = request.form.get("username", "").strip()
         try:
-            charger()
+            users = load_users()
             found = None
-            user_data = None
-            for u, d in users_db.items():
+            for u, d in users.items():
                 if d.get("email") == identifiant or u == identifiant:
                     found = u
-                    user_data = d
                     break
             if found:
                 token = secrets.token_hex(32)
-                reset_tokens[token] = {
-                    "username": found,
-                    "expires": time.time() + 3600
-                }
-                _log("password_reset_request", f"Token genere pour {found}", found)
-                # Afficher directement le lien de réinitialisation (pas d'email sur Render Free)
-                return render_template("reset_sent.html", 
-                    email=identifiant,
-                    reset_link=f"/reset-password/{token}",
-                    token=token)
+                reset_tokens[token] = {"username": found, "expires": time.time() + 3600}
+                _log("password_reset_request", f"Token pour {found}", found)
+                return render_template("reset_sent.html", email=identifiant, reset_link=f"/reset-password/{token}", token=token)
             return render_template("forgot_password.html", error="Aucun compte trouve avec cet email ou nom d'utilisateur")
         except Exception as ex:
             return render_template("forgot_password.html", error=f"Erreur: {str(ex)}")
@@ -290,7 +280,6 @@ def reset_password(token):
     if time.time() > info["expires"]:
         del reset_tokens[token]
         return render_template("error.html", code=400, message="Token expire. Refaites une demande.")
-    
     if request.method == "POST":
         np = request.form.get("new_password", "")
         c = request.form.get("confirm_password", "")
@@ -299,11 +288,11 @@ def reset_password(token):
         if len(np) < 6:
             return render_template("reset_password.html", token=token, error="Mot de passe trop court (min 6 caracteres)")
         try:
-            charger()
+            users = load_users()
             username = info["username"]
-            if username in users_db:
-                users_db[username]["password"] = np
-                sauvegarder()
+            if username in users:
+                users[username]["password"] = np
+                save_users(users)
                 del reset_tokens[token]
                 _log("password_reset", f"Mot de passe reinitialise pour {username}", username)
                 return render_template("login.html", success="Mot de passe reinitialise avec succes ! Connectez-vous.")
@@ -311,30 +300,17 @@ def reset_password(token):
             return render_template("reset_password.html", token=token, error=f"Erreur: {str(ex)}")
     return render_template("reset_password.html", token=token)
 
-# === DÉBLOCAGE IP (pour les utilisateurs bloqués) ===
 @app.route("/unblock-me", methods=["GET", "POST"])
 def unblock_request():
     ip = get_client_ip()
     if request.method == "POST":
         username = request.form.get("username", "").strip()
-        # Vérifier que l'IP est bien bloquée
-        if ip in blocked_ips_db:
-            # Enregistrer la demande
-            pending_unblocks[ip] = {
-                "username": username,
-                "ip": ip,
-                "requested_at": time.time(),
-                "reason": blocked_ips_db[ip].get("reason", "Tentatives echouees")
-            }
+        if ip in load_blocked_ips():
+            pending_unblocks[ip] = {"username": username, "ip": ip, "requested_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "reason": "Demande utilisateur"}
             _log("unblock_request", f"Demande deblocage IP {ip} par {username}", username)
-            return render_template("blocked.html", ip=ip, 
-                message="Votre demande a ete envoyee a l'administrateur. Vous serez debloque sous 24h ou contactez l'admin.")
-        else:
-            # IP déjà débloquée
-            return redirect('/login')
+        return render_template("blocked.html", ip=ip, message="Votre demande a ete envoyee a l'administrateur.")
     return render_template("blocked.html", ip=ip, show_form=True)
 
-# === ROUTES UTILISATEUR ===
 @app.route("/")
 def home():
     if session.get('logged_in'):
@@ -342,12 +318,13 @@ def home():
             return redirect('/admin/dashboard')
         return redirect('/dashboard')
     return redirect('/login')
+
 @app.route("/dashboard")
 @login_required
 def user_dashboard():
-    charger()
     username = session['username']
-    user_info = users_db.get(username, {})
+    users = load_users()
+    user_info = users.get(username, {})
     scans = []
     if os.path.exists(SCAN_DIR):
         for f in sorted(os.listdir(SCAN_DIR), reverse=True):
@@ -362,11 +339,7 @@ def user_dashboard():
                             d["_total_vulns"] = len(v)
                             scans.append(d)
                 except: pass
-    today = datetime.now().strftime("%Y-%m-%d")
-    scans_today = sum(1 for s in scans if s.get("timestamp","").startswith(today))
-    scans_left = max(0, 10 - scans_today)
-    return render_template("user_dashboard.html", username=username, user_info=user_info, scans=scans[:20], scans_left=scans_left)à
-
+    return render_template("user_dashboard.html", username=username, user_info=user_info, scans=scans[:20])
 
 @app.route("/scan", methods=["GET", "POST"])
 @login_required
@@ -394,10 +367,10 @@ def run_scan_async(scan_id, target, scan_type, username):
         with open(os.path.join(SCAN_DIR, scan_id + ".json"), "w") as f:
             json.dump(results, f, indent=2)
         scan_status[scan_id] = {"status": "done"}
-        charger()
-        if username in users_db:
-            users_db[username]["total_scans"] = users_db[username].get("total_scans", 0) + 1
-            sauvegarder()
+        users = load_users()
+        if username in users:
+            users[username]["total_scans"] = users[username].get("total_scans", 0) + 1
+            save_users(users)
     except Exception as e:
         scan_status[scan_id] = {"status": "error", "error": str(e)[:200]}
 
@@ -478,15 +451,15 @@ def profile():
         if n != c:
             return render_template("profile.html", error="Les mots de passe ne correspondent pas")
         try:
-            charger()
-            if session['username'] not in users_db:
+            users = load_users()
+            if session['username'] not in users:
                 return render_template("profile.html", error="Utilisateur introuvable")
-            if users_db[session['username']]["password"] != o:
+            if users[session['username']]["password"] != o:
                 return render_template("profile.html", error="Ancien mot de passe incorrect")
             if len(n) < 6:
                 return render_template("profile.html", error="Mot de passe trop court (min 6 caracteres)")
-            users_db[session['username']]["password"] = n
-            sauvegarder()
+            users[session['username']]["password"] = n
+            save_users(users)
             return render_template("profile.html", success="Mot de passe change avec succes")
         except Exception as ex:
             return render_template("profile.html", error=f"Erreur: {str(ex)}")
@@ -505,28 +478,18 @@ def api_scan_status(scan_id):
 @admin_required
 def admin_dashboard():
     try:
-        charger()
-        # Stats
-        total_regular = sum(1 for u in users_db.values() if u.get('role') != 'admin')
-        total_admin = sum(1 for u in users_db.values() if u.get('role') == 'admin')
-        total_scans = sum(u.get("total_scans", 0) for u in users_db.values())
-        blocked_count = sum(1 for u in users_db.values() if u.get("blocked"))
-        active_count = sum(1 for u in users_db.values() if u.get("last_login") and u.get("last_login") != "Jamais" and u.get("last_login") is not None)
+        users = load_users()
+        blocked_ips = load_blocked_ips()
         
-        # Liste utilisateurs
+        total_regular = sum(1 for u in users.values() if u.get('role') != 'admin')
+        total_scans = sum(u.get("total_scans", 0) for u in users.values())
+        blocked_count = sum(1 for u in users.values() if u.get("blocked"))
+        active_count = sum(1 for u in users.values() if u.get("last_login") and u.get("last_login") != "Jamais" and u.get("last_login") is not None)
+        
         users_list = []
-        for u, d in users_db.items():
-            users_list.append({
-                "username": u,
-                "email": d.get("email", ""),
-                "role": d.get("role", "user"),
-                "created_at": d.get("created_at", ""),
-                "last_login": d.get("last_login", "Jamais"),
-                "total_scans": d.get("total_scans", 0),
-                "blocked": d.get("blocked", False)
-            })
+        for u, d in users.items():
+            users_list.append({"username": u, "email": d.get("email", ""), "role": d.get("role", "user"), "created_at": d.get("created_at", ""), "last_login": d.get("last_login", "Jamais"), "total_scans": d.get("total_scans", 0), "blocked": d.get("blocked", False)})
         
-        # Logs
         logs = []
         lp = os.path.join(LOG_DIR, "audit.log")
         if os.path.exists(lp) and os.path.getsize(lp) > 0:
@@ -539,7 +502,6 @@ def admin_dashboard():
                             except: pass
             except: pass
         
-        # Scans récents
         recent_scans = []
         if os.path.exists(SCAN_DIR):
             for f in sorted(os.listdir(SCAN_DIR), reverse=True)[:10]:
@@ -554,10 +516,9 @@ def admin_dashboard():
                             recent_scans.append(d)
                     except: pass
         
-        # Demandes de déblocage en attente
         pending_list = []
         for ip, info in pending_unblocks.items():
-            pending_list.append({"ip": ip, "username": info.get("username", "?"), "requested_at": datetime.fromtimestamp(info.get("requested_at", 0)).strftime("%Y-%m-%d %H:%M:%S") if info.get("requested_at") else "?"})
+            pending_list.append({"ip": ip, "username": info.get("username", "?"), "requested_at": info.get("requested_at", "?")})
         
         _log("admin_view", "Dashboard consulte", session.get('username', 'admin'))
         
@@ -568,9 +529,9 @@ def admin_dashboard():
             active_users=active_count,
             users=users_list,
             scans=recent_scans,
-            blocked_ips=blocked_ips_db if blocked_ips_db else {},
-            blocked_ips_count=len(blocked_ips_db),
-            ips_bloquees=blocked_ips_db if blocked_ips_db else {},
+            blocked_ips=blocked_ips if blocked_ips else {},
+            blocked_ips_count=len(blocked_ips),
+            ips_bloquees=blocked_ips if blocked_ips else {},
             pending_unblocks=pending_list,
             logs=logs[-30:][::-1] if logs else [])
     except Exception as e:
@@ -585,18 +546,10 @@ def admin_dashboard():
 @admin_required
 def admin_users():
     try:
-        charger()
+        users = load_users()
         users_list = []
-        for u, d in users_db.items():
-            users_list.append({
-                "username": u,
-                "email": d.get("email", ""),
-                "role": d.get("role", "user"),
-                "created_at": d.get("created_at", ""),
-                "last_login": d.get("last_login", "Jamais"),
-                "total_scans": d.get("total_scans", 0),
-                "blocked": d.get("blocked", False)
-            })
+        for u, d in users.items():
+            users_list.append({"username": u, "email": d.get("email", ""), "role": d.get("role", "user"), "created_at": d.get("created_at", ""), "last_login": d.get("last_login", "Jamais"), "total_scans": d.get("total_scans", 0), "blocked": d.get("blocked", False)})
         return render_template("admin_users.html", users=users_list)
     except:
         return render_template("admin_users.html", users=[])
@@ -604,30 +557,30 @@ def admin_users():
 @app.route("/admin/block/<username>")
 @admin_required
 def admin_block_user(username):
-    charger()
-    if username in users_db and users_db[username].get("role") != "admin":
-        users_db[username]["blocked"] = True
-        sauvegarder()
+    users = load_users()
+    if username in users and users[username].get("role") != "admin":
+        users[username]["blocked"] = True
+        save_users(users)
         _log("block_user", f"Utilisateur bloque: {username}", session.get('username'))
     return redirect('/admin/users')
 
 @app.route("/admin/unblock/<username>")
 @admin_required
 def admin_unblock_user(username):
-    charger()
-    if username in users_db:
-        users_db[username]["blocked"] = False
-        sauvegarder()
+    users = load_users()
+    if username in users:
+        users[username]["blocked"] = False
+        save_users(users)
         _log("unblock_user", f"Utilisateur debloque: {username}", session.get('username'))
     return redirect('/admin/users')
 
 @app.route("/admin/delete/<username>")
 @admin_required
 def admin_delete_user(username):
-    charger()
-    if username in users_db and users_db[username].get("role") != "admin":
-        del users_db[username]
-        sauvegarder()
+    users = load_users()
+    if username in users and users[username].get("role") != "admin":
+        del users[username]
+        save_users(users)
         _log("delete_user", f"Utilisateur supprime: {username}", session.get('username'))
     return redirect('/admin/users')
 
@@ -652,17 +605,19 @@ def admin_scans():
 @app.route("/admin/ips")
 @admin_required
 def admin_ips():
-    return render_template("admin_ips.html", 
-        block_ips=blocked_ips_db if blocked_ips_db else {},
-        unblock_requests=[{"ip": ip, "username": info.get("username", "?"), "requested_at": datetime.fromtimestamp(info.get("requested_at", 0)).strftime("%Y-%m-%d %H:%M:%S")} for ip, info in pending_unblocks.items()])
+    blocked_ips = load_blocked_ips()
+    pending_list = []
+    for ip, info in pending_unblocks.items():
+        pending_list.append({"ip": ip, "username": info.get("username", "?"), "requested_at": info.get("requested_at", "?")})
+    return render_template("admin_ips.html", blocked_ips=blocked_ips, pending_unblocks=pending_list)
 
 @app.route("/admin/unblock-ip/<ip>")
 @admin_required
 def admin_unblock_ip(ip):
-    if ip in blocked_ips_db:
-        del blocked_ips_db[ip]
-        sauvegarder()
-    # Nettoyer aussi les demandes en attente
+    blocked = load_blocked_ips()
+    if ip in blocked:
+        del blocked[ip]
+        save_blocked_ips(blocked)
     if ip in pending_unblocks:
         del pending_unblocks[ip]
     _log("unblock_ip", f"IP debloquee: {ip}", session.get('username'))
@@ -675,8 +630,9 @@ def admin_block_ip_manual():
     reason = request.form.get("reason", "Blocage manuel")
     permanent = request.form.get("permanent", "off") == "on"
     if ip:
-        blocked_ips_db[ip] = {"ip": ip, "blocked_at": time.time(), "reason": reason, "permanent": permanent, "blocked_by": session.get('username')}
-        sauvegarder()
+        blocked = load_blocked_ips()
+        blocked[ip] = {"ip": ip, "blocked_at": time.time(), "reason": reason, "permanent": permanent, "blocked_by": session.get('username')}
+        save_blocked_ips(blocked)
         _log("block_ip_manual", f"IP {ip} bloquee manuellement: {reason}", session.get('username'))
     return redirect("/admin/ips")
 
@@ -696,7 +652,7 @@ def admin_alertes():
                         if any(k in action for k in ["blocked", "intrusion", "attack", "suspicious", "failed", "error", "scan"]):
                             logs.append(log)
                     except: pass
-    return render_template("admin_alertes.html", alertes=logs[-100:], blocked_count=len(blocked_ips_db))
+    return render_template("admin_alertes.html", alertes=logs[-100:], blocked_count=len(load_blocked_ips()))
 
 @app.route("/admin/logs")
 @admin_required
@@ -712,18 +668,16 @@ def admin_logs():
                     except: pass
     return render_template("admin_logs.html", logs=logs[-200:][::-1])
 
-# === DIAGNOSTIC ===
 @app.route("/debug-users")
 def debug_users():
-    charger()
+    users = load_users()
+    blocked = load_blocked_ips()
     return jsonify({
-        "users_in_memory": list(users_db.keys()),
-        "total_users": len(users_db),
-        "admin_exists": "admin" in users_db,
-        "users_detail": {u: {"role": d.get("role"), "email": d.get("email"), "scans": d.get("total_scans"), "blocked": d.get("blocked")} for u, d in users_db.items()},
-        "blocked_ips": dict(blocked_ips_db),
+        "users": list(users.keys()),
+        "total": len(users),
+        "details": {u: {"role": d.get("role"), "email": d.get("email"), "scans": d.get("total_scans"), "blocked": d.get("blocked")} for u, d in users.items()},
+        "blocked_ips": dict(blocked),
         "pending_unblocks": dict(pending_unblocks),
-        "scan_dir_exists": os.path.exists(SCAN_DIR),
         "scan_dir_files": os.listdir(SCAN_DIR) if os.path.exists(SCAN_DIR) else []
     })
 
@@ -741,16 +695,16 @@ def server_error(e):
 def health():
     return jsonify({"status": "ok", "time": datetime.now().isoformat()})
 
-# === DEMARRAGE ===
 if __name__ == "__main__":
-    charger()
+    # Verifier que users.json existe avec admin
+    users = load_users()
     print("=" * 60)
     print("  NOXSCAN SECURITY PLATFORM")
     print("=" * 60)
     print(f"  Admin: admin / Hacker_Pro_2005")
-    print(f"  Email: hountondjielvis07@gmail.com")
-    print(f"  Utilisateurs: {list(users_db.keys())}")
-    print(f"  IPs bloquees: {list(blocked_ips_db.keys())}")
+    print(f"  Utilisateurs: {list(users.keys())}")
+    print(f"  IPs bloquees: {list(load_blocked_ips().keys())}")
     print(f"  Port: {Config.PORT}")
     print("=" * 60)
     app.run(host=Config.HOST, port=Config.PORT, debug=False)
+APPEOF

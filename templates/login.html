@@ -36,7 +36,6 @@
             transition: all 0.2s;
         }
         .input-group input:focus { outline: none; border-color: #00c853; box-shadow: 0 0 0 3px rgba(0,200,83,0.15); }
-        /* Zone du mot de passe avec bouton œil */
         .password-wrapper {
             position: relative;
             display: flex;
@@ -84,14 +83,12 @@
             <a href="/register" style="color:#2979ff;text-decoration:none;">Créer un compte</a> · 
             <a href="/forgot-password" style="color:#666;text-decoration:none;">Mot de passe oublié</a>
         </div>
-        
         {% if error %}
         <div class="error">{{ error }}</div>
         {% endif %}
         {% if success %}
         <div class="success">{{ success }}</div>
         {% endif %}
-        
         <form method="POST">
             <div class="input-group">
                 <label>Identifiant</label>
@@ -101,7 +98,7 @@
                 <label>Mot de passe</label>
                 <div class="password-wrapper">
                     <input type="password" id="password" name="password" placeholder="Mot de passe" required>
-                    <button type="button" class="toggle-pwd" id="toggleBtn" onclick="togglePassword()" title="Afficher/masquer le mot de passe">👁️</button>
+                    <button type="button" class="toggle-pwd" id="toggleBtn" onclick="togglePassword()" title="Afficher/masquer">👁️</button>
                 </div>
             </div>
             <button type="submit">Se connecter</button>
@@ -113,7 +110,6 @@
             <span>🔐</span> Connexion sécurisée — HTTPS activé
         </div>
     </div>
-
     <script>
         function togglePassword() {
             var pwd = document.getElementById('password');
