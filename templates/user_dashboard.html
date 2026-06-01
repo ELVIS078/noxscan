@@ -1,92 +1,79 @@
 <!DOCTYPE html>
 <html lang="fr">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Tableau de bord - NoxScan</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;background:#0a0a1a;color:#e0e0e0;display:flex;min-height:100vh}
-.sidebar{width:240px;background:#0d0d22;padding:20px;border-right:1px solid #1a1a3e;display:flex;flex-direction:column}
-.sidebar h2{color:#00ff88;font-size:18px;margin-bottom:20px}
-.sidebar .user-info{color:#8888aa;font-size:13px;padding:10px;background:#1a1a3e;border-radius:8px;margin-bottom:16px}
-.sidebar .user-info strong{color:#00ff88;display:block;font-size:15px}
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Dashboard - NoxScan</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#0a0c10;color:#d0d0d0;display:flex;min-height:100vh}
+.sidebar{width:240px;background:#0d0d22;padding:20px;border-right:1px solid #1a1a3e;min-height:100vh}
+.sidebar h2{color:#00c853;font-size:18px;margin-bottom:20px}
 .sidebar a{display:block;color:#8888aa;padding:10px;border-radius:8px;text-decoration:none;margin-bottom:4px}
-.sidebar a:hover,.sidebar a.active{background:#1a1a3e;color:#00ff88}
-.sidebar .spacer{flex:1}
-.sidebar .logout{color:#ff4444}
+.sidebar a:hover,.sidebar a.active{background:#1a1a3e;color:#00c853}
 .main{flex:1;padding:30px}
 h1{color:#fff;font-size:24px;margin-bottom:8px}
-.subtitle{color:#8888aa;margin-bottom:24px}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:30px}
-.stat-card{background:#12122a;border:1px solid #2a2a5a;border-radius:12px;padding:20px;text-align:center}
-.stat-card .num{font-size:28px;font-weight:bold;color:#00ff88}
-.stat-card .lbl{color:#8888aa;font-size:13px;margin-top:4px}
-.stat-card .num-warn{color:#ffaa00}
-.stat-card .num-danger{color:#ff4444}
+p{color:#888;margin-bottom:24px}
+.card{background:#14171e;border:1px solid #1e2128;border-radius:12px;padding:20px;margin-bottom:20px}
+.card h3{color:#00c853;margin-bottom:12px;font-size:16px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+.stat-box{background:#14171e;border:1px solid #1e2128;border-radius:10px;padding:16px;text-align:center}
+.stat-box .num{color:#00c853;font-size:28px;font-weight:bold}
+.stat-box .label{color:#666;font-size:12px;margin-top:4px}
 table{width:100%;border-collapse:collapse}
-th,td{padding:10px;text-align:left;border-bottom:1px solid #1a1a3e}
-th{color:#00ff88;font-size:12px;text-transform:uppercase}
-td{color:#c0c0e0;font-size:13px}
+th,td{padding:10px;text-align:left;border-bottom:1px solid #1e2128}
+th{color:#00c853;font-size:12px;text-transform:uppercase}
+td{color:#c0c0d0;font-size:13px}
 .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold}
 .badge-red{background:#3a0a0a;color:#ff4444}
-.badge-yellow{background:#3a2a0a;color:#ffaa00}
-.badge-green{background:#0a3a0a;color:#00ff88}
+.badge-orange{background:#3a2a0a;color:#ff8800}
+.badge-green{background:#0a3a0a;color:#00c853}
 .btn{display:inline-block;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px;margin:2px}
-.btn-green{background:#00ff88;color:#0a0a1a;font-weight:bold}
-.btn-outline{border:1px solid #2a2a5a;color:#8888aa}
-.btn-outline:hover{border-color:#00ff88;color:#00ff88}
-.action-btns{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap}
-.action-btns .btn{font-size:14px;padding:10px 20px}
-.empty{text-align:center;color:#8888aa;padding:40px}
-</style></head>
+.btn-green{background:#00c853;color:#000}
+.btn-outline{background:transparent;border:1px solid #00c853;color:#00c853}
+</style>
+</head>
 <body>
 <div class="sidebar">
 <h2>🔒 NoxScan</h2>
-<div class="user-info">
-<strong>{{ username }}</strong>
-Rôle: Utilisateur<br>
-Email: {{ user_info.get('email','') }}<br>
-Membre depuis: {{ user_info.get('created_at','')[:10] if user_info.get('created_at') else 'N/A' }}
-</div>
-<a href="/dashboard" class="active">📊 Tableau de bord</a>
-<a href="/scan">🔍 Nouveau scan</a>
-<a href="/history">📋 Historique</a>
-<a href="/profile">👤 Mon profil</a>
-<div class="spacer"></div>
-<a href="/logout" class="logout">🚪 Déconnexion</a>
+<a href="/dashboard" class="active">Dashboard</a>
+<a href="/scan">Nouveau scan</a>
+<a href="/history">Historique</a>
+<a href="/profile">Profil</a>
+{% if session.get('role') == 'admin' %}
+<a href="/admin/dashboard" style="color:#ffcc00;">Admin panel</a>
+{% endif %}
+<a href="/logout">Deconnexion</a>
 </div>
 <div class="main">
-<h1>👋 Bonjour, {{ username }} !</h1>
-<p class="subtitle">Bienvenue sur votre tableau de bord NoxScan.</p>
+<h1>Bienvenue, {{ username }}</h1>
+<p>Tableau de bord utilisateur</p>
 
 <div class="stats">
-<div class="stat-card"><div class="num">{{ scans|length }}</div><div class="lbl">Scans effectués</div></div>
-<div class="stat-card"><div class="num {% if scans_left < 3 %}num-warn{% endif %}">{{ scans_left }}</div><div class="lbl">Scans restants (aujourd'hui)</div></div>
-<div class="stat-card"><div class="num num-danger">{{ user_info.get('total_scans',0) }}</div><div class="lbl">Total des scans</div></div>
+<div class="stat-box"><div class="num">0</div><div class="label">Scans</div></div>
+<div class="stat-box"><div class="num">0</div><div class="label">Vulnerabilites</div></div>
+<div class="stat-box"><div class="num">0</div><div class="label">Critiques</div></div>
 </div>
 
-<div class="action-btns">
-<a href="/scan" class="btn btn-green">🔍 Lancer un scan</a>
-<a href="/history" class="btn btn-outline">📋 Voir l'historique</a>
-</div>
-
-<h2 style="color:#00ff88;margin-bottom:16px">📋 Vos derniers scans</h2>
-{% if scans %}
+<div class="card">
+<h3>Derniers scans</h3>
+{% if scans and scans|length > 0 %}
 <table>
-<tr><th>Cible</th><th>Date</th><th>Statut</th><th>Vuln.</th><th>Actions</th></tr>
+<tr><th>Cible</th><th>Date</th><th>Vuln.</th><th>Critique</th><th>Actions</th></tr>
 {% for s in scans %}
 <tr>
-<td>{{ s.get('target','?')[:30] }}</td>
-<td>{{ s.get('timestamp','?')[:19] }}</td>
-<td><span class="badge {% if s.get('status')=='completed' %}badge-green{% else %}badge-yellow{% endif %}">{{ s.get('status','?') }}</span></td>
-<td>{% if s.get('_total_vulns',0) > 0 %}<span class="badge {% if s.get('_critical',0) > 0 %}badge-red{% else %}badge-yellow{% endif %}">{{ s.get('_total_vulns',0) }} (C:{{ s.get('_critical',0) }})</span>{% else %}Aucune{% endif %}</td>
-<td><a href="/results/{{ s.get('scan_id','') }}" class="btn btn-outline">Voir</a> <a href="/report/{{ s.get('scan_id','') }}" class="btn btn-outline">Rapport</a></td>
+<td>{{ s.get('target','?') }}</td>
+<td>{{ s.get('timestamp','?')[:16] }}</td>
+<td>{{ s.get('_total_vulns',0) }}</td>
+<td>{% if s.get('_critical',0) > 0 %}<span class="badge badge-red">{{ s.get('_critical',0) }}</span>{% else %}0{% endif %}</td>
+<td><a href="/results/{{ s.get('scan_id','') }}" class="btn btn-green">Voir</a></td>
 </tr>
 {% endfor %}
 </table>
 {% else %}
-<div class="empty">
-<p style="font-size:40px;margin-bottom:12px">🔍</p>
-<p>Vous n'avez pas encore effectué de scan.</p>
-<p><a href="/scan" style="color:#00ff88">Lancer votre premier scan</a></p>
-</div>
+<p style="color:#666;text-align:center;padding:20px;">Aucun scan pour le moment. <a href="/scan" style="color:#2979ff;">Lancer un scan</a></p>
 {% endif %}
+</div>
 </div>
 </body>
 </html>
