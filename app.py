@@ -707,4 +707,5 @@ if __name__ == "__main__":
     print(f"  Port: {Config.PORT}")
     print("=" * 60)
     app.run(host=Config.HOST, port=Config.PORT, debug=False)
-APPEOF
+APPEOFà
+
